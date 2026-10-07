@@ -74,6 +74,12 @@ struct ContentView: View {
             if phase == .active { model.start() }
             else if phase == .background { model.stop(reason: .appInterrupted) }
         }
+        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("ResetOrientationIntentTriggered"))) { _ in
+            model.reset()
+        }
+        .accessibilityAction(.magicTap) {
+            if model.isRunning { model.reset() } else { model.start() }
+        }
     }
 
     private var headingCard: some View {
