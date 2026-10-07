@@ -82,14 +82,14 @@ actor HapticEngineDriver: HapticDriving {
             guard let engine else { return }
             engineEpoch &+= 1
             let epoch = engineEpoch
-            engine.stoppedHandler = { [weak self] _ in
+            engine.stoppedHandler = { @Sendable [weak self] _ in
                 Task { await self?.engineStopped(epoch: epoch) }
             }
-            engine.resetHandler = { [weak self] in
+            engine.resetHandler = { @Sendable [weak self] in
                 Task { await self?.engineStopped(epoch: epoch) }
             }
             starting = true
-            engine.start { [weak self] error in
+            engine.start { @Sendable [weak self] error in
                 let message = error?.localizedDescription
                 Task { await self?.engineStarted(epoch: epoch, error: message) }
             }
@@ -141,7 +141,7 @@ actor HapticEngineDriver: HapticDriving {
             }
             let pattern = try CHHapticPattern(events: events, parameters: [])
             let created = try engine.makeAdvancedPlayer(with: pattern)
-            created.completionHandler = { [weak self] error in
+            created.completionHandler = { @Sendable [weak self] error in
                 let message = error?.localizedDescription
                 Task { await self?.completed(revision: token, error: message) }
             }

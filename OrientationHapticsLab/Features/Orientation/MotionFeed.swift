@@ -17,7 +17,7 @@ protocol HeadingFeed: AnyObject {
 
 @MainActor
 final class MotionFeed: HeadingFeed {
-    private enum Event: Sendable { case sample(HeadingSample), error(String) }
+    enum Event: Sendable { case sample(HeadingSample), error(String) }
     private let manager = CMMotionManager()
     private let queue: OperationQueue = {
         let queue = OperationQueue()
@@ -50,15 +50,23 @@ final class MotionFeed: HeadingFeed {
             }
         }
         manager.deviceMotionUpdateInterval = 1.0 / 30.0
-        manager.startDeviceMotionUpdates(using: .xArbitraryZVertical, to: queue) { data, error in
-            if let error { channel.continuation.yield(.error(error.localizedDescription)); return }
+        manager.startDeviceMotionUpdates(using: .xArbitraryZVertical, to: queue,
+                                         withHandler: Self.makeHandler(for: channel.continuation))
+    }
+
+    /// The Objective-C callback is not Sendable in the SDK. Creating it inside start()
+    /// would inherit MainActor even though Core Motion calls it on the supplied queue.
+    nonisolated static func makeHandler(for continuation: AsyncStream<Event>.Continuation)
+        -> @Sendable (CMDeviceMotion?, (any Error)?) -> Void {
+        { data, error in
+            if let error { continuation.yield(.error(error.localizedDescription)); return }
             guard let data else { return }
             let r = data.attitude.rotationMatrix
             let matrix = ReferenceToDeviceRotationMatrix(
                 m11: r.m11, m12: r.m12, m13: r.m13,
                 m21: r.m21, m22: r.m22, m23: r.m23,
                 m31: r.m31, m32: r.m32, m33: r.m33)
-            channel.continuation.yield(.sample(HeadingSample(
+            continuation.yield(.sample(HeadingSample(
                 heading: HeadingMath.screenOutwardHeadingDegrees(referenceToDevice: matrix),
                 timestamp: data.timestamp, receivedAt: Date())))
         }

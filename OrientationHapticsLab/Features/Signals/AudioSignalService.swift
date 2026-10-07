@@ -24,11 +24,11 @@ final class AudioSignalService: NSObject, SignalOutput {
         state = .init(status: "\(mode.title) 준비됨")
         super.init()
         NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)
-            .sink { [weak self] _ in
+            .sink { @Sendable [weak self] _ in
                 Task { @MainActor [weak self] in self?.stop() }
             }.store(in: &subscriptions)
         NotificationCenter.default.publisher(for: AVAudioSession.interruptionNotification)
-            .sink { [weak self] notification in
+            .sink { @Sendable [weak self] notification in
                 let began = (notification.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt)
                     == AVAudioSession.InterruptionType.began.rawValue
                 if began {
@@ -38,7 +38,7 @@ final class AudioSignalService: NSObject, SignalOutput {
                 }
             }.store(in: &subscriptions)
         NotificationCenter.default.publisher(for: AVAudioSession.routeChangeNotification)
-            .sink { [weak self] notification in
+            .sink { @Sendable [weak self] notification in
                 let disconnected = (notification.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt)
                     == AVAudioSession.RouteChangeReason.oldDeviceUnavailable.rawValue
                 if disconnected {
@@ -48,7 +48,7 @@ final class AudioSignalService: NSObject, SignalOutput {
                 }
             }.store(in: &subscriptions)
         NotificationCenter.default.publisher(for: AVAudioSession.mediaServicesWereResetNotification)
-            .sink { [weak self] _ in
+            .sink { @Sendable [weak self] _ in
                 Task { @MainActor [weak self] in
                     self?.interrupt(message: "소리 서비스를 다시 준비합니다.")
                     self?.synthesizer = nil
