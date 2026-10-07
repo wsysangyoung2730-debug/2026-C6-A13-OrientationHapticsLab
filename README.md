@@ -97,11 +97,34 @@ xcodebuild -project OrientationHapticsLab.xcodeproj \
 
 ## 구현 구조
 
-- `Packages/OrientationCore`: 기기 API와 분리된 방향·각도 감지·걸음 추정·기록 모델
-- `OrientationHapticsLab`: Core Motion, Core Haptics, AVFoundation 음성·비프음, 저장소와 SwiftUI 화면
-- 센서의 측정 시각과 작업 세대를 검사해 오래된 콜백이 새 사이클을 변경하지 않도록 처리
-- 진동 장치 준비, 보행 센서 호출, 로그 파일 저장을 UI 스레드에서 분리
-- 로그의 신호 이력은 앱에 접수된 요청이며 실제 출력이나 체감을 보장하지 않음
+```text
+OrientationHapticsLab/
+├── App/                       앱 시작점
+├── Features/
+│   ├── Orientation/           방향 센서·기준 리셋·실험 화면
+│   ├── Walking/               걸음 센서·걸음과 좌표 화면
+│   ├── Signals/               진동·음성·비프음 출력과 색상 신호
+│   ├── Settings/              신호 설정 화면과 저장
+│   └── Logs/                  사이클 로그 화면과 파일 저장
+└── Resources/                 색상·이미지 리소스
+OrientationHapticsLabTests/
+├── Settings/                  설정 저장 테스트
+├── Logs/                      로그 보존·보정 테스트
+├── Signals/                   신호 선택·오디오 테스트
+└── Integration/               리셋 반응·측정 생명주기 테스트
+Packages/OrientationCore/
+├── Sources/OrientationCore/
+│   ├── Orientation/           방향 계산·각도 도달 감지
+│   ├── Walking/               걸음과 좌표 추정
+│   └── Sessions/              사이클 기록 모델
+└── Tests/OrientationCoreTests/ 방향·걸음 계산 테스트
+```
+
+- `LabModel`은 실험 사이클을 관리하며 각 기능의 센서·신호·저장소를 연결합니다.
+- 계산 모듈은 기기 API와 분리되어 있습니다. Xcode와 Swift Package는 하위 폴더의 소스를 자동으로 포함합니다.
+- 센서의 측정 시각과 작업 세대를 검사해 오래된 콜백이 새 사이클을 변경하지 않도록 처리합니다.
+- 진동 장치 준비, 보행 센서 호출, 로그 파일 저장은 UI 스레드와 분리합니다.
+- 로그의 신호 이력은 앱에 접수된 요청이며 실제 출력이나 체감을 보장하지 않습니다.
 
 ## 참고
 
