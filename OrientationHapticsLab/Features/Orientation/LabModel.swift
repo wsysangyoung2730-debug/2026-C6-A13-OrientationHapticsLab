@@ -105,6 +105,7 @@ final class LabModel: ObservableObject {
               isSimulation || (0..<0.5).contains(ProcessInfo.processInfo.systemUptime - sample.timestamp),
               tracker.reset(absoluteHeadingDegrees: heading) != nil else {
             status = "안정적인 방향을 받은 후 다시 눌러 주세요."
+            UIAccessibility.post(notification: .announcement, argument: status)
             return
         }
         clearSimulatedSignal()
@@ -117,6 +118,7 @@ final class LabModel: ObservableObject {
         cycleNumber += 1
         isCalibrated = true
         status = "현재 방향을 0°로 설정했어요."
+        UIAccessibility.post(notification: .announcement, argument: status)
         lastSignal = "기준 방향 리셋"
         startWalkingCycle(at: resetDate)
         if signals.playReset() { recordSignal(trigger: 0, patternID: "reset: \(signals.mode.title)") }
@@ -205,6 +207,7 @@ final class LabModel: ObservableObject {
     private func sensorFailed(_ message: String) {
         stop(reason: .appInterrupted)
         status = "센서 오류: \(message)"
+        UIAccessibility.post(notification: .announcement, argument: status)
     }
 
     private func invalidateReference(message: String) {
@@ -216,6 +219,7 @@ final class LabModel: ObservableObject {
         isCalibrated = false
         canReset = false
         status = message
+        UIAccessibility.post(notification: .announcement, argument: status)
     }
 
     private func startWalkingCycle(at date: Date) {
