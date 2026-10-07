@@ -52,7 +52,7 @@ final class LabModel: ObservableObject {
         signals.prepare()
         if isSimulation {
             simulate(heading: 0)
-            status = "시뮬레이터 · 화면과 각도 계산만 미리보기"
+            status = "시뮬레이터 · 가상 방향으로 신호 체험"
             return
         }
         status = "방향 센서 준비 중"
