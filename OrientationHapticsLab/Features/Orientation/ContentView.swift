@@ -1,5 +1,6 @@
 import SwiftUI
 import OrientationCore
+import Accessibility
 
 struct ContentView: View {
     @StateObject private var model = LabModel()
@@ -79,12 +80,18 @@ struct ContentView: View {
         VStack(spacing: 8) {
             Text(model.cycleNumber == 0 ? "첫 기준점을 설정해 주세요" : "사이클 \(model.cycleNumber)")
                 .font(.subheadline.monospacedDigit()).foregroundStyle(.secondary)
+                .accessibilityHidden(true)
+            
             Text(model.isCalibrated ? model.directionLabel : "기준 설정 대기")
                 .font(.title2.bold())
+                .accessibilityHidden(true)
+            
             Text(model.isCalibrated ? "\(abs(model.relativeDegrees), specifier: "%.0f")°" : "—°")
                 .font(.system(size: 86, weight: .bold, design: .rounded))
                 .monospacedDigit().minimumScaleFactor(0.5).lineLimit(1)
                 .accessibilityLabel(model.isCalibrated ? "\(model.directionLabel) \(abs(model.relativeDegrees), specifier: "%.0f")도" : "아직 기준 방향 없음")
+                .accessibilityAddTraits(.updatesFrequently) // 실시간으로 변하는 정보임을 VoiceOver에 알림
+            
             Text(model.status).font(.subheadline).multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity).padding(22)
