@@ -4,9 +4,9 @@
  classes = {};
  objectVersion = 77;
  objects = {
-  A00000000000000000000001 = {isa = PBXProject; attributes = {BuildIndependentTargetsInParallel = 1; LastUpgradeCheck = 2600;}; buildConfigurationList = A00000000000000000000010; compatibilityVersion = "Xcode 16.0"; developmentRegion = ko; hasScannedForEncodings = 0; knownRegions = (ko, en, Base); mainGroup = A00000000000000000000002; packageReferences = (A00000000000000000000020); productRefGroup = A00000000000000000000003; projectDirPath = ""; projectRoot = ""; targets = (A00000000000000000000005); };
-  A00000000000000000000002 = {isa = PBXGroup; children = (A00000000000000000000004, A00000000000000000000003); sourceTree = "<group>";};
-  A00000000000000000000003 = {isa = PBXGroup; children = (A00000000000000000000006); name = Products; sourceTree = "<group>";};
+  A00000000000000000000001 = {isa = PBXProject; attributes = {BuildIndependentTargetsInParallel = 1; LastUpgradeCheck = 2600;}; buildConfigurationList = A00000000000000000000010; compatibilityVersion = "Xcode 16.0"; developmentRegion = ko; hasScannedForEncodings = 0; knownRegions = (ko, en, Base); mainGroup = A00000000000000000000002; packageReferences = (A00000000000000000000020); productRefGroup = A00000000000000000000003; projectDirPath = ""; projectRoot = ""; targets = (A00000000000000000000005, B00000000000000000000001); };
+  A00000000000000000000002 = {isa = PBXGroup; children = (A00000000000000000000004, B00000000000000000000002, A00000000000000000000003); sourceTree = "<group>";};
+  A00000000000000000000003 = {isa = PBXGroup; children = (A00000000000000000000006, B00000000000000000000003); name = Products; sourceTree = "<group>";};
   A00000000000000000000004 = {isa = PBXFileSystemSynchronizedRootGroup; path = OrientationHapticsLab; sourceTree = "<group>";};
   A00000000000000000000005 = {isa = PBXNativeTarget; buildConfigurationList = A00000000000000000000011; buildPhases = (A00000000000000000000007, A00000000000000000000008, A00000000000000000000009); buildRules = (); dependencies = (); fileSystemSynchronizedGroups = (A00000000000000000000004); name = OrientationHapticsLab; packageProductDependencies = (A00000000000000000000021); productName = OrientationHapticsLab; productReference = A00000000000000000000006; productType = "com.apple.product-type.application";};
   A00000000000000000000006 = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = OrientationHapticsLab.app; sourceTree = BUILT_PRODUCTS_DIR;};
@@ -22,6 +22,19 @@
   A00000000000000000000020 = {isa = XCLocalSwiftPackageReference; relativePath = Packages/OrientationCore;};
   A00000000000000000000021 = {isa = XCSwiftPackageProductDependency; productName = OrientationCore;};
   A00000000000000000000022 = {isa = PBXBuildFile; productRef = A00000000000000000000021;};
+
+ B00000000000000000000001 = {isa = PBXNativeTarget; buildConfigurationList = B00000000000000000000010; buildPhases = (B00000000000000000000004, B00000000000000000000005, B00000000000000000000006); buildRules = (); dependencies = (B00000000000000000000007); fileSystemSynchronizedGroups = (B00000000000000000000002); name = OrientationHapticsLabTests; packageProductDependencies = (A00000000000000000000021); productName = OrientationHapticsLabTests; productReference = B00000000000000000000003; productType = "com.apple.product-type.bundle.unit-test";};
+ B00000000000000000000002 = {isa = PBXFileSystemSynchronizedRootGroup; path = OrientationHapticsLabTests; sourceTree = "<group>";};
+ B00000000000000000000003 = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = OrientationHapticsLabTests.xctest; sourceTree = BUILT_PRODUCTS_DIR;};
+ B00000000000000000000004 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0;};
+ B00000000000000000000005 = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (B00000000000000000000014); runOnlyForDeploymentPostprocessing = 0;};
+ B00000000000000000000006 = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0;};
+ B00000000000000000000007 = {isa = PBXTargetDependency; target = A00000000000000000000005; targetProxy = B00000000000000000000008;};
+ B00000000000000000000008 = {isa = PBXContainerItemProxy; containerPortal = A00000000000000000000001; proxyType = 1; remoteGlobalIDString = A00000000000000000000005; remoteInfo = OrientationHapticsLab;};
+ B00000000000000000000010 = {isa = XCConfigurationList; buildConfigurations = (B00000000000000000000011, B00000000000000000000012); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release;};
+ B00000000000000000000011 = {isa = XCBuildConfiguration; name = Debug; buildSettings = {BUNDLE_LOADER = "$(TEST_HOST)"; GENERATE_INFOPLIST_FILE = YES; PRODUCT_BUNDLE_IDENTIFIER = com.wsysangyoung.orientationhapticslab.tests; PRODUCT_NAME = "$(TARGET_NAME)"; SWIFT_VERSION = 6.0; IPHONEOS_DEPLOYMENT_TARGET = 26.0; TARGETED_DEVICE_FAMILY = 1; TEST_HOST = "$(BUILT_PRODUCTS_DIR)/OrientationHapticsLab.app/OrientationHapticsLab"; CODE_SIGN_STYLE = Automatic;};};
+ B00000000000000000000012 = {isa = XCBuildConfiguration; name = Release; buildSettings = {BUNDLE_LOADER = "$(TEST_HOST)"; GENERATE_INFOPLIST_FILE = YES; PRODUCT_BUNDLE_IDENTIFIER = com.wsysangyoung.orientationhapticslab.tests; PRODUCT_NAME = "$(TARGET_NAME)"; SWIFT_VERSION = 6.0; IPHONEOS_DEPLOYMENT_TARGET = 26.0; TARGETED_DEVICE_FAMILY = 1; TEST_HOST = "$(BUILT_PRODUCTS_DIR)/OrientationHapticsLab.app/OrientationHapticsLab"; CODE_SIGN_STYLE = Automatic;};};
+ B00000000000000000000014 = {isa = PBXBuildFile; productRef = A00000000000000000000021;};
  };
  rootObject = A00000000000000000000001;
 }
