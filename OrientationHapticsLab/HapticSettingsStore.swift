@@ -11,10 +11,12 @@ final class HapticSettingsStore: ObservableObject {
     private struct Snapshot: Codable {
         let schemaVersion: Int
         let angles: [String: AngleSetting]
+        let signalMode: String?
     }
 
     static let supportedAngles = [-90, -45, -30, 30, 45, 90]
     @Published private(set) var settings: [Int: AngleSetting]
+    @Published private(set) var signalMode: SignalMode = .haptic
     @Published private(set) var errorMessage: String?
 
     private let defaults: UserDefaults
@@ -39,6 +41,11 @@ final class HapticSettingsStore: ObservableObject {
         settings[angle]?.enabled ?? false
     }
 
+    func setSignalMode(_ mode: SignalMode) {
+        signalMode = mode
+        save()
+    }
+
     func setEnabled(_ angle: Int, enabled: Bool) {
         guard var setting = settings[angle] else { return }
         setting.enabled = enabled
@@ -61,13 +68,13 @@ final class HapticSettingsStore: ObservableObject {
     private func load() {
         guard let rawValue = defaults.object(forKey: storageKey) else { return }
         guard let data = rawValue as? Data, data.count <= 65_536 else {
-            errorMessage = "저장된 진동 설정을 읽지 못해 기본값을 사용해요. 변경한 설정은 다시 저장됩니다."
+            errorMessage = "저장된 신호 설정을 읽지 못해 기본값을 사용해요. 변경한 설정은 다시 저장됩니다."
             return
         }
         do {
             let snapshot = try JSONDecoder().decode(Snapshot.self, from: data)
-            guard snapshot.schemaVersion == 1 else {
-                errorMessage = "이 버전에서 읽을 수 없는 진동 설정이에요. 기본값을 사용합니다."
+            guard (1...2).contains(snapshot.schemaVersion) else {
+                errorMessage = "이 버전에서 읽을 수 없는 신호 설정이에요. 기본값을 사용합니다."
                 return
             }
             var restored = Self.makeDefaults()
@@ -78,21 +85,26 @@ final class HapticSettingsStore: ObservableObject {
                 }
             }
             settings = restored
+            signalMode = snapshot.signalMode.flatMap(SignalMode.init(rawValue:)) ?? .haptic
+            if let savedMode = snapshot.signalMode, SignalMode(rawValue: savedMode) == nil {
+                errorMessage = "저장된 신호 방식을 읽지 못해 진동을 사용해요. 각도별 설정은 유지됩니다."
+            }
         } catch {
-            errorMessage = "저장된 진동 설정을 읽지 못해 기본값을 사용해요. 변경한 설정은 다시 저장됩니다."
+            errorMessage = "저장된 신호 설정을 읽지 못해 기본값을 사용해요. 변경한 설정은 다시 저장됩니다."
         }
     }
 
     private func save() {
         let snapshot = Snapshot(
-            schemaVersion: 1,
-            angles: Dictionary(uniqueKeysWithValues: settings.map { (String($0.key), $0.value) })
+            schemaVersion: 2,
+            angles: Dictionary(uniqueKeysWithValues: settings.map { (String($0.key), $0.value) }),
+            signalMode: signalMode.rawValue
         )
         do {
             defaults.set(try JSONEncoder().encode(snapshot), forKey: storageKey)
             errorMessage = nil
         } catch {
-            errorMessage = "진동 설정을 저장하지 못했어요. 앱을 닫기 전에 다시 변경해 주세요."
+            errorMessage = "신호 설정을 저장하지 못했어요. 앱을 닫기 전에 다시 변경해 주세요."
         }
     }
 
