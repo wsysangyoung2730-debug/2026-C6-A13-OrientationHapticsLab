@@ -5,6 +5,7 @@ struct SignalOverlay: View {
     let angle: Int
     let currentAngle: Double
     var isPreview = false
+    var mode: SignalMode = .haptic
     @ScaledMetric(relativeTo: .largeTitle) private var angleFontSize = 132.0
 
     private var direction: String { angle < 0 ? "왼쪽" : "오른쪽" }
@@ -20,6 +21,7 @@ struct SignalOverlay: View {
                     Text("화면 미리보기")
                         .font(.headline)
                 }
+                Text("\(mode.title) 신호").font(.headline)
                 Text(direction)
                     .font(.largeTitle.bold())
                     .lineLimit(1).minimumScaleFactor(0.6)
@@ -35,7 +37,7 @@ struct SignalOverlay: View {
         }
         .contentShape(Rectangle())
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(isPreview ? "화면 미리보기. " : "")\(direction) \(angle.magnitude)도 신호. 현재 \(currentText)")
+        .accessibilityLabel("\(isPreview ? "화면 미리보기. " : "")\(direction) \(angle.magnitude)도 \(mode.title) 신호. 현재 \(currentText)")
         .accessibilityIdentifier("signal-overlay")
     }
 
