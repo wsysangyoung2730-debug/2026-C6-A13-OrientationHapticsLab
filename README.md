@@ -1,8 +1,83 @@
 # OrientationHapticsLab
 
-허리에 세로로 착용한 아이폰으로 상대 회전각과 진동 신호를 검증하는 실험 앱입니다.
+허리에 세로로 고정한 아이폰으로 **리셋한 방향에서 얼마나 회전했는지** 측정하고, 각도마다 다른 진동을 보내는 실험 앱입니다. 개발 중인 앱은 [`develop`](https://github.com/wsysangyoung2730-debug/2026-C6-A13-OrientationHapticsLab/tree/develop)에서 확인하세요.
 
-- iOS 26 이상
-- 배 앞쪽 허리, 화면이 바깥을 향하도록 세로 고정
-- 화면 버튼으로 기준 방향과 측정 사이클 리셋
-- 개발 통합 브랜치: `develop`
+## 실행
+
+1. `develop` 브랜치를 받고 `OrientationHapticsLab.xcodeproj`를 Xcode 26 이상에서 엽니다.
+2. 앱 타깃의 Signing & Capabilities에서 자신의 Team을 선택합니다. 필요하면 Bundle Identifier를 자신의 고유 값으로 변경합니다.
+3. iOS 26 이상 아이폰을 실행 대상으로 선택해 빌드합니다.
+4. 동작 및 피트니스 접근을 허용합니다. 권한이 없어도 방향 측정은 사용할 수 있지만 걸음 수는 제공되지 않습니다.
+5. 배 앞쪽 허리에 러닝 밴드로 세로 고정하고 **화면이 바깥쪽**을 향하도록 합니다.
+6. 정면을 향한 뒤 **현재 방향을 0°로 리셋**을 누릅니다.
+
+정확한 진동 체감과 센서 오차는 아이폰에서 검증해야 합니다. 시뮬레이터는 가상 방향과 화면 미리보기만 제공하며 실제 진동·보행 검증 결과가 아닙니다.
+
+## 주요 기능
+
+- 중력 기준 수평면에서 기기의 화면 정면 방향을 구해 상대 회전각 표시
+- 왼쪽은 음수, 오른쪽은 양수. UI에는 방향과 각도를 함께 표시
+- 좌우 30°·45°·90° 진입/통과 시 진동, 경계 흔들림 중 중복 방지
+- 각도별 사용 여부, 진동 패턴, 세기, 선명도를 설정하고 저장
+- 진동 신호 재생 동안 각도별 단색 전체 화면과 큰 방향·각도 표시
+- 버튼 리셋 시 이전 사이클 로그 저장, 방향·걸음·추정 거리와 좌표 초기화
+- 걸음 수, 추정 이동 거리, 초기 방향 기준 전방/오른쪽 좌표 표시
+- 로그와 진동 이력 기기 내 저장 및 확인
+
+## 화면 예시
+
+아래 이미지는 iOS 26.3 시뮬레이터에서 확인한 화면입니다. 전체 화면 신호는 화면 미리보기이며 실제 진동 측정 결과가 아닙니다.
+
+<img src="docs/screenshots/settings.png" alt="각도별 진동 설정" width="260"> <img src="docs/screenshots/signal-left30.png" alt="왼쪽 30도 전체 화면 신호" width="260">
+
+## 동작 조건
+
+- 1차 버전은 **앱을 전면에 열고 화면이 켜진 상태**에서 테스트합니다. 측정 중 자동 잠금을 막고 중지하면 원래 동작으로 복구합니다.
+- 앱 중단·센서 끊김·수평 방향 계산이 불가능한 자세 이후에는 기준을 다시 설정합니다.
+- 머리의 시선이 아니라 **아이폰이 고정된 몸의 방향**을 측정합니다. 밴드 안에서 아이폰이 움직이면 오차가 생깁니다.
+- 리셋은 화면 버튼만 지원합니다.
+- 공간 크기 측정, GPS 위치, 장애물 감지, 워치·에어팟 연동은 포함하지 않습니다.
+
+## 걸음과 좌표의 의미
+
+걸음 수는 `CMPedometer`가 처리한 누적 자료입니다. 매 걸음 즉시 표시되는 것은 아니며 데이터가 늦게 도착할 수 있습니다. 좌표는 **몸이 향한 방향으로 앞으로 걸었다는 가정의 추정값**입니다. 옆걸음·뒷걸음은 구분하지 않습니다.
+
+시스템 추정 거리를 받을 수 있으면 사용하고, 없으면 한 걸음 0.65m로 계산합니다. 한 사이클 안에서는 거리 계산 방식을 고정해 중복 합산을 피합니다. 지연된 걸음 자료는 해당 시간 구간의 방향 이력과 결합하며, 회전 구간이나 기록 누락 시 좌표 불확실성을 표시합니다. 이것은 실제 위치 좌표를 직접 측정하는 방식이 아닙니다.
+
+## 개발 검증
+
+```sh
+swift test --package-path Packages/OrientationCore
+xcodebuild -project OrientationHapticsLab.xcodeproj \
+  -scheme OrientationHapticsLab -sdk iphonesimulator \
+  -destination 'generic/platform=iOS Simulator' \
+  CODE_SIGNING_ALLOWED=NO build
+xcodebuild -project OrientationHapticsLab.xcodeproj \
+  -scheme OrientationHapticsLab \
+  -destination 'platform=iOS Simulator,name=iPhone 17 Pro' \
+  CODE_SIGNING_ALLOWED=NO test
+```
+
+시뮬레이터 이름은 설치된 기기에 맞춰 바꿉니다.
+
+터미널이 Command Line Tools를 선택한 Mac에서는 `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer`를 설정하고 `xcrun swift`를 사용합니다.
+
+- 계산 테스트: 착용 방향·기울기, 좌우 부호, ±180° 경계, 각도 진입/통과·재진입, 지연된 걸음 자료, 사이클 분리, 로그 직렬화
+- 앱 테스트: 설정 저장·복원, 손상 데이터 처리, 이전 로그 보정·보존 (15개)
+- 자동 빌드: develop 대상 PR 및 develop 변경 시 GitHub Actions 실행
+- 현장 검증: [착용 검증 절차](docs/field-validation.md)
+- 브랜치와 커밋: [Git 작업 규칙](CONTRIBUTING.md)
+
+## 구현 구조
+
+- `Packages/OrientationCore`: 기기 API와 분리된 방향·각도 감지·걸음 추정·기록 모델
+- `OrientationHapticsLab`: Core Motion, Core Haptics, 저장소와 SwiftUI 화면
+- 센서의 측정 시각과 작업 세대를 검사해 오래된 콜백이 새 사이클을 변경하지 않도록 처리
+
+## 참고
+
+[OrientationCoreMotionTest](https://github.com/na0k1m/OrientationCoreMotionTest)의 상대 방향 리셋과 각도에 따른 진동 실험 구조를 참고했습니다. 새 앱은 세로 착용 좌표계, 각도별 사용자 설정, 보행 기록을 위한 별도 구현입니다.
+
+- [Apple: 처리된 기기 동작 데이터](https://developer.apple.com/documentation/coremotion/getting-processed-device-motion-data)
+- [Apple: Core Haptics](https://developer.apple.com/documentation/corehaptics)
+- [Apple: CMPedometer](https://developer.apple.com/documentation/coremotion/cmpedometer)
