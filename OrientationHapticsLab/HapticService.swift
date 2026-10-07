@@ -120,7 +120,8 @@ final class HapticService: ObservableObject {
         do {
             if engine == nil { try createEngine() }
             guard let engine else { return }
-            // Starting an already running engine is safe; do not rely solely on callback timing.
+            // Rebind every start: an already queued stop callback belongs to the previous epoch.
+            installHandlers(on: engine)
             try engine.start()
             isReady = true
             lastError = nil
@@ -189,6 +190,11 @@ final class HapticService: ObservableObject {
         newEngine.playsHapticsOnly = true
         newEngine.isMutedForAudio = true
         newEngine.isAutoShutdownEnabled = true
+        installHandlers(on: newEngine)
+        engine = newEngine
+    }
+
+    private func installHandlers(on newEngine: CHHapticEngine) {
         engineGeneration &+= 1
         let generation = engineGeneration
         newEngine.stoppedHandler = { [weak self] reason in
@@ -207,7 +213,6 @@ final class HapticService: ObservableObject {
                 if self.isForeground { self.prepare() }
             }
         }
-        engine = newEngine
     }
 
     private func play(events: [CHHapticEvent], label: String, signedDegrees: Double? = nil) -> Bool {

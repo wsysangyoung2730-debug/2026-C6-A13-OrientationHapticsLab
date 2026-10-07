@@ -72,7 +72,7 @@ final class LabModel: ObservableObject {
 
     func reset() {
         guard isRunning, let sample = latestSample, let heading = sample.heading,
-              isSimulation || Date().timeIntervalSince(sample.receivedAt) < 0.5,
+              isSimulation || (0..<0.5).contains(ProcessInfo.processInfo.systemUptime - sample.timestamp),
               tracker.reset(absoluteHeadingDegrees: heading) != nil else {
             status = "안정적인 방향을 받은 후 다시 눌러 주세요."
             return
@@ -113,6 +113,14 @@ final class LabModel: ObservableObject {
 
     private func consume(_ sample: HeadingSample) {
         guard isRunning else { return }
+        if !isSimulation {
+            guard sample.timestamp.isFinite,
+                  (0..<0.5).contains(ProcessInfo.processInfo.systemUptime - sample.timestamp) else {
+                invalidateReference(message: "방향 자료가 늦게 도착했어요. 기준을 다시 설정해 주세요.")
+                return
+            }
+            if let previous = latestSample, sample.timestamp <= previous.timestamp { return }
+        }
         if !isSimulation, let previous = latestSample, sample.timestamp - previous.timestamp > 0.5 {
             invalidateReference(message: "방향 측정이 중단됐어요. 기준을 다시 설정해 주세요.")
         }
