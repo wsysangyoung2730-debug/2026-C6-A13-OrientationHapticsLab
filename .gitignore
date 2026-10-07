@@ -8,3 +8,4 @@ xcuserdata/
 *.ipa
 *.dSYM
 .build-results/
+*.xcodeproj/project.xcworkspace/
