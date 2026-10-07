@@ -85,10 +85,10 @@ final class HapticService: ObservableObject {
         self.isForeground = isForeground ?? (UIApplication.shared.applicationState == .active)
         self.responseTimeout = responseTimeout
         NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)
-            .sink { [weak self] _ in Task { @MainActor [weak self] in self?.suspend() } }
+            .sink { @Sendable [weak self] _ in Task { @MainActor [weak self] in self?.suspend() } }
             .store(in: &subscriptions)
         NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)
-            .sink { [weak self] _ in Task { @MainActor [weak self] in self?.isForeground = true } }
+            .sink { @Sendable [weak self] _ in Task { @MainActor [weak self] in self?.isForeground = true } }
             .store(in: &subscriptions)
         if !self.supportsHaptics { status = "이 기기는 진동을 지원하지 않아요." }
     }

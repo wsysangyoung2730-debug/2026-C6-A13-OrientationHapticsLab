@@ -38,6 +38,17 @@ final class PedometerFeed: WalkingFeed {
         }
     }
 
+    /// Core Motion invokes legacy Objective-C handlers on its own queue, not our actor.
+    nonisolated static func makeHandler(from start: Date,
+        reply: @escaping @Sendable (WalkingSample?, String?) -> Void)
+        -> @Sendable (CMPedometerData?, (any Error)?) -> Void {
+        { data, error in
+            let sample = data.map { WalkingSample(startDate: start, endDate: $0.endDate,
+                                                  steps: $0.numberOfSteps.intValue, distance: $0.distance?.doubleValue) }
+            reply(sample, error?.localizedDescription)
+        }
+    }
+
     func stop() {
         revision &+= 1
         let token = revision
@@ -78,12 +89,9 @@ private actor PedometerDriver {
         let pedometer = live ?? CMPedometer()
         live = pedometer
         lastLiveSample = .distantPast
-        pedometer.startUpdates(from: startDate) { [weak self] data, error in
-            let message = error?.localizedDescription
-            let sample = data.map { WalkingSample(startDate: startDate, endDate: $0.endDate,
-                                                  steps: $0.numberOfSteps.intValue, distance: $0.distance?.doubleValue) }
+        pedometer.startUpdates(from: startDate, withHandler: PedometerFeed.makeHandler(from: startDate) { [weak self] sample, message in
             Task { await self?.deliver(sample, error: message, revision: revision, isLive: true, reply: reply) }
-        }
+        })
         // Query the system's processed cache if live delivery is silent. This does not invent steps.
         refreshTask = Task { [weak self] in
             while !Task.isCancelled {
@@ -108,12 +116,9 @@ private actor PedometerDriver {
               Date().timeIntervalSince(lastLiveSample) >= 3,
               CMPedometer.authorizationStatus() == .authorized else { return }
         queryInFlight = true
-        live?.queryPedometerData(from: start, to: Date()) { [weak self] data, error in
-            let message = error?.localizedDescription
-            let sample = data.map { WalkingSample(startDate: start, endDate: $0.endDate,
-                                                  steps: $0.numberOfSteps.intValue, distance: $0.distance?.doubleValue) }
+        live?.queryPedometerData(from: start, to: Date(), withHandler: PedometerFeed.makeHandler(from: start) { [weak self] sample, message in
             Task { await self?.deliver(sample, error: message, revision: revision, isLive: false, reply: reply) }
-        }
+        })
     }
 
     private func deliver(_ sample: WalkingSample?, error: String?, revision: UInt, isLive: Bool,
@@ -130,15 +135,12 @@ private actor PedometerDriver {
               end > start else { completion(nil, "종료 시 수신값 · 걸음 최종 조회 불가"); return }
         let query = CMPedometer()
         finalQueries[cycleID] = query
-        query.queryPedometerData(from: start, to: end) { [weak self] data, error in
-            let message = error?.localizedDescription
-            let sample = data.map { WalkingSample(startDate: start, endDate: $0.endDate,
-                                                  steps: $0.numberOfSteps.intValue, distance: $0.distance?.doubleValue) }
+        query.queryPedometerData(from: start, to: end, withHandler: PedometerFeed.makeHandler(from: start) { [weak self] sample, message in
             Task {
                 await self?.finishQuery(cycleID: cycleID)
                 completion(sample, message.map { "종료 시 수신값 · 최종 조회 오류: \($0)" })
             }
-        }
+        })
     }
 
     private func finishQuery(cycleID: UUID) { finalQueries[cycleID] = nil }
