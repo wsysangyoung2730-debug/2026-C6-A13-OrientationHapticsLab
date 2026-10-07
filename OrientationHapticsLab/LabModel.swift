@@ -7,6 +7,9 @@ import UIKit
 final class LabModel: ObservableObject {
     let haptics = HapticService()
     let sessionStore = SessionStore()
+    let settings = HapticSettingsStore()
+    @Published private(set) var simulatedSignalAngle: Int?
+    private var simulatedSignalTask: Task<Void, Never>?
     @Published private(set) var walk = WalkSnapshot()
     @Published private(set) var stepStatus = "기준을 리셋하면 걸음 집계를 시작합니다."
     private let pedometer = PedometerFeed()
@@ -43,6 +46,7 @@ final class LabModel: ObservableObject {
 
     func start() {
         guard !isRunning else { return }
+        applySettings()
         isRunning = true
         UIApplication.shared.isIdleTimerDisabled = true
         haptics.prepare()
@@ -67,6 +71,7 @@ final class LabModel: ObservableObject {
     }
 
     func stop(reason: SessionEndReason = .stopped) {
+        clearSimulatedSignal()
         archiveCycle(reason: reason)
         feed.stop()
         watchdog?.cancel()
@@ -85,6 +90,7 @@ final class LabModel: ObservableObject {
             status = "안정적인 방향을 받은 후 다시 눌러 주세요."
             return
         }
+        clearSimulatedSignal()
         let resetDate = Date()
         archiveCycle(reason: .reset, at: resetDate)
         haptics.stop()
@@ -100,23 +106,44 @@ final class LabModel: ObservableObject {
         if haptics.playReset() { recordHaptic(trigger: 0, patternID: "reset") }
     }
 
-    func setEnabled(_ angle: Int, enabled: Bool) {
-        if enabled { enabledAngles.insert(angle) } else { enabledAngles.remove(angle) }
+    func applySettings() {
+        enabledAngles = settings.enabledAngles
         detector.setCues(AngleCue.defaults.filter { enabledAngles.contains($0.id) })
         if isCalibrated { _ = detector.update(relativeDegrees: relativeDegrees) }
     }
 
     func setEditing(_ value: Bool) {
         editing = value
+        clearSimulatedSignal()
         haptics.stop()
         detector.reset()
         if !value, isCalibrated { _ = detector.update(relativeDegrees: relativeDegrees) }
     }
 
     func preview(_ cue: AngleCue) {
-        if haptics.playAngle(Double(cue.signedDegrees)) {
-            recordHaptic(trigger: Double(cue.signedDegrees), patternID: "preview-directional-\(cue.signedDegrees)")
+        playCue(cue, isPreview: true)
+    }
+
+    private func playCue(_ cue: AngleCue, isPreview: Bool = false) {
+        let configuration = settings.configuration(for: cue.signedDegrees)
+        if haptics.playAngle(Double(cue.signedDegrees), configuration: configuration) {
+            recordHaptic(trigger: Double(cue.signedDegrees),
+                         patternID: "\(isPreview ? "preview: " : "")\(configuration.describe)")
+        } else if isSimulation {
+            clearSimulatedSignal()
+            simulatedSignalAngle = cue.signedDegrees
+            simulatedSignalTask = Task { [weak self] in
+                try? await Task.sleep(for: .milliseconds(1200))
+                guard !Task.isCancelled else { return }
+                self?.simulatedSignalAngle = nil
+            }
         }
+    }
+
+    private func clearSimulatedSignal() {
+        simulatedSignalTask?.cancel()
+        simulatedSignalTask = nil
+        simulatedSignalAngle = nil
     }
 
     func simulate(heading: Double) {
@@ -152,9 +179,7 @@ final class LabModel: ObservableObject {
         recordWalkingHeading(sample)
         if !editing, let cue = detector.update(relativeDegrees: relativeDegrees) {
             lastSignal = cue.label
-            if haptics.playAngle(Double(cue.signedDegrees)) {
-                recordHaptic(trigger: Double(cue.signedDegrees), patternID: "directional-\(cue.signedDegrees)")
-            }
+            playCue(cue)
         }
     }
 
@@ -164,6 +189,7 @@ final class LabModel: ObservableObject {
     }
 
     private func invalidateReference(message: String) {
+        clearSimulatedSignal()
         archiveCycle(reason: .appInterrupted)
         tracker.clear()
         detector.reset()
