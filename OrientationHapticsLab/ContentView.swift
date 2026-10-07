@@ -5,6 +5,7 @@ struct ContentView: View {
     @StateObject private var model = LabModel()
     @Environment(\.scenePhase) private var scenePhase
     @State private var showSettings = false
+    @State private var showLogs = false
     @State private var simulatedHeading = 0.0
 
     var body: some View {
@@ -26,11 +27,7 @@ struct ContentView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    NavigationLink {
-                        LogsView(store: model.sessionStore)
-                            .onAppear { model.setEditing(true) }
-                            .onDisappear { model.setEditing(false) }
-                    } label: {
+                    Button { showLogs = true } label: {
                         Label("로그", systemImage: "clock.arrow.circlepath")
                     }.accessibilityLabel("이전 사이클 로그")
                 }
@@ -46,8 +43,19 @@ struct ContentView: View {
             SettingsView(store: model.settings, haptics: model.haptics) { model.preview($0) }
                 .overlay { ActiveSignalLayer(model: model, haptics: model.haptics, isPreview: true) }
         }
-        .onChange(of: showSettings) { _, value in model.setEditing(value) }
-        .onReceive(model.settings.$settings) { updated in
+        .fullScreenCover(isPresented: $showLogs) {
+            NavigationStack {
+                LogsView(store: model.sessionStore)
+                    .toolbar {
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button("완료") { showLogs = false }
+                        }
+                    }
+            }
+        }
+        .onChange(of: showSettings) { _, _ in model.setEditing(showSettings || showLogs) }
+        .onChange(of: showLogs) { _, _ in model.setEditing(showSettings || showLogs) }
+        .onReceive(model.settings.$settings) { _ in
             // Published values arrive before the property is stored. Apply on the next main-actor turn.
             Task { @MainActor in model.applySettings() }
         }
