@@ -1,5 +1,6 @@
 import Combine
 import Foundation
+import UIKit
 import OrientationCore
 
 @MainActor
@@ -8,11 +9,9 @@ final class SessionStore: ObservableObject {
     @Published private(set) var storageMessage: String?
     @Published private(set) var completionNotes: [String: String] = [:]
 
-    private struct Archive: Codable {
-        var version = 1
-        var records: [SessionRecord]
-        var completionNotes: [String: String]
-    }
+    private let writer = SessionArchiveWriter()
+    private var saveRevision: UInt = 0
+    private var pendingSave: Task<Void, Never>?
     private let fileURL: URL
     private var readFailed = false
 
@@ -49,7 +48,7 @@ final class SessionStore: ObservableObject {
     }
 
     var exportJSON: String {
-        guard let data = try? Self.encoder().encode(Archive(records: records, completionNotes: completionNotes)),
+        guard let data = try? SessionArchive.encoder().encode(SessionArchive(records: records, completionNotes: completionNotes)),
               let text = String(data: data, encoding: .utf8) else { return "{}" }
         return text
     }
@@ -59,7 +58,7 @@ final class SessionStore: ObservableObject {
         do {
             let decoder = JSONDecoder()
             decoder.dateDecodingStrategy = .iso8601
-            let archive = try decoder.decode(Archive.self, from: Data(contentsOf: fileURL))
+            let archive = try decoder.decode(SessionArchive.self, from: Data(contentsOf: fileURL))
             guard archive.version == 1 else {
                 throw CocoaError(.fileReadCorruptFile)
             }
@@ -73,22 +72,25 @@ final class SessionStore: ObservableObject {
         }
     }
 
-    private func persist() {
-        guard !readFailed else { return }
-        do {
-            try FileManager.default.createDirectory(at: fileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
-            let data = try Self.encoder().encode(Archive(records: records, completionNotes: completionNotes))
-            try data.write(to: fileURL, options: .atomic)
-            storageMessage = nil
-        } catch {
-            storageMessage = "로그 저장 실패 · 현재 기록은 메모리에 남아 있어요. 공유로 내보내 주세요. (\(error.localizedDescription))"
-        }
+    /// Used when a caller needs a durable checkpoint, without blocking the UI thread.
+    func flush() async {
+        let task = pendingSave
+        await task?.value
     }
 
-    private static func encoder() -> JSONEncoder {
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        return encoder
+    private func persist() {
+        guard !readFailed else { return }
+        saveRevision &+= 1
+        let revision = saveRevision
+        let archive = SessionArchive(records: records, completionNotes: completionNotes)
+        let url = fileURL
+        // Allow a reset/stop archive to finish if the app immediately goes to the background.
+        let backgroundTask = UIApplication.shared.beginBackgroundTask(withName: "Save orientation cycle")
+        pendingSave = Task { [weak self, writer] in
+            let error = await writer.save(archive, to: url, revision: revision)
+            if backgroundTask != .invalid { UIApplication.shared.endBackgroundTask(backgroundTask) }
+            guard let self, self.saveRevision == revision else { return }
+            self.storageMessage = error.map { "로그 저장 실패 · 현재 기록은 메모리에 남아 있어요. 공유로 내보내 주세요. (\($0))" }
+        }
     }
 }

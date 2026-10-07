@@ -166,15 +166,17 @@ final class HapticSettingsStoreTests: XCTestCase {
 
 @MainActor
 final class SessionStoreTests: XCTestCase {
-    func testAppendPersistsAndReloadsNewestFirstWithoutLosingRecordFields() throws {
-        try withTemporaryArchive { url in
+    func testAppendPersistsAndReloadsNewestFirstWithoutLosingRecordFields() async throws {
+        try await withTemporaryArchive { url in
             let older = record(startOffset: 0)
             let newer = record(startOffset: 100)
             let store = SessionStore(fileURL: url)
             XCTAssertTrue(store.records.isEmpty)
             XCTAssertNil(store.storageMessage)
             store.append(older, completionNote: "이전 사이클 완료")
+            await store.flush()
             store.append(newer, completionNote: "현재 사이클 완료")
+            await store.flush()
             XCTAssertNil(store.storageMessage)
             let reloaded = SessionStore(fileURL: url)
             XCTAssertEqual(reloaded.records, [newer, older])
@@ -184,31 +186,36 @@ final class SessionStoreTests: XCTestCase {
         }
     }
 
-    func testDuplicateAppendDoesNotReplaceAnExistingRecordOrItsNote() throws {
-        try withTemporaryArchive { url in
+    func testDuplicateAppendDoesNotReplaceAnExistingRecordOrItsNote() async throws {
+        try await withTemporaryArchive { url in
             let original = record(startOffset: 0)
             let duplicate = record(id: original.id, startOffset: 100)
             let store = SessionStore(fileURL: url)
             store.append(original, completionNote: "원래 기록")
+            await store.flush()
             store.append(duplicate, completionNote: "중복 기록")
+            await store.flush()
             XCTAssertEqual(store.records, [original])
             XCTAssertEqual(store.completionNote(for: original.id), "원래 기록")
             XCTAssertEqual(SessionStore(fileURL: url).records, [original])
         }
     }
 
-    func testLateFinalReconciliationChangesOnlyMatchingArchivedCycle() throws {
-        try withTemporaryArchive { url in
+    func testLateFinalReconciliationChangesOnlyMatchingArchivedCycle() async throws {
+        try await withTemporaryArchive { url in
             let older = record(startOffset: 0)
             let newer = record(startOffset: 100)
             let store = SessionStore(fileURL: url)
             store.append(older, completionNote: "최종 걸음 조회 중")
+            await store.flush()
             store.append(newer, completionNote: "새 사이클 기록")
+            await store.flush()
             let finalWalk = WalkSnapshot(
                 steps: 7, estimatedDistance: 4.6, forwardDisplacement: 4.1,
                 rightDisplacement: -0.5, source: .systemEstimate, isDisplacementUncertain: true
             )
             store.reconcile(id: older.id, walk: finalWalk, completionNote: "최종 걸음 조회 완료")
+            await store.flush()
             let corrected = try XCTUnwrap(store.records.first { $0.id == older.id })
             XCTAssertEqual(corrected.walk, finalWalk)
             XCTAssertEqual(corrected.startedAt, older.startedAt)
@@ -224,17 +231,20 @@ final class SessionStoreTests: XCTestCase {
         }
     }
 
-    func testMissingFinalWalkOnlyChangesNoteAndUnknownIDDoesNothing() throws {
-        try withTemporaryArchive { url in
+    func testMissingFinalWalkOnlyChangesNoteAndUnknownIDDoesNothing() async throws {
+        try await withTemporaryArchive { url in
             let original = record(startOffset: 0)
             let store = SessionStore(fileURL: url)
             store.append(original, completionNote: "최종 걸음 조회 중")
+            await store.flush()
             store.reconcile(id: original.id, walk: nil, completionNote: "최종 조회 불가 · 종료 시 수신값")
+            await store.flush()
             XCTAssertEqual(store.records, [original])
             XCTAssertEqual(store.completionNote(for: original.id), "최종 조회 불가 · 종료 시 수신값")
             let savedBeforeUnknownID = try Data(contentsOf: url)
             let notesBeforeUnknownID = store.completionNotes
             store.reconcile(id: UUID(), walk: .init(steps: 999), completionNote: "다른 사이클")
+            await store.flush()
             XCTAssertEqual(store.records, [original])
             XCTAssertEqual(store.completionNotes, notesBeforeUnknownID)
             XCTAssertEqual(try Data(contentsOf: url), savedBeforeUnknownID)
@@ -244,8 +254,8 @@ final class SessionStoreTests: XCTestCase {
         }
     }
 
-    func testCorruptArchiveIsPreservedWhileNewRecordsRemainExportable() throws {
-        try withTemporaryArchive { url in
+    func testCorruptArchiveIsPreservedWhileNewRecordsRemainExportable() async throws {
+        try await withTemporaryArchive { url in
             let corrupt = Data("original unreadable archive".utf8)
             try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
             try corrupt.write(to: url)
@@ -254,7 +264,9 @@ final class SessionStoreTests: XCTestCase {
             XCTAssertNotNil(store.storageMessage)
             let newRecord = record(startOffset: 100)
             store.append(newRecord, completionNote: "이번 실행 기록")
+            await store.flush()
             store.reconcile(id: newRecord.id, walk: .init(steps: 7), completionNote: "최종 조회 완료")
+            await store.flush()
             XCTAssertEqual(store.records.count, 1)
             XCTAssertEqual(store.records.first?.walk.steps, 7)
             XCTAssertEqual(try Data(contentsOf: url), corrupt, "Unreadable original must never be overwritten.")
@@ -266,8 +278,8 @@ final class SessionStoreTests: XCTestCase {
         }
     }
 
-    func testFutureArchiveSchemaIsPreservedAndReported() throws {
-        try withTemporaryArchive { url in
+    func testFutureArchiveSchemaIsPreservedAndReported() async throws {
+        try await withTemporaryArchive { url in
             let payload = Data(#"{"version":999,"records":[],"completionNotes":{}}"#.utf8)
             try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
             try payload.write(to: url)
@@ -275,29 +287,31 @@ final class SessionStoreTests: XCTestCase {
             XCTAssertTrue(store.records.isEmpty)
             XCTAssertNotNil(store.storageMessage)
             store.append(record(startOffset: 0), completionNote: "메모리 기록")
+            await store.flush()
             XCTAssertEqual(store.records.count, 1)
             XCTAssertEqual(try Data(contentsOf: url), payload)
         }
     }
 
-    func testReloadMarksAnInterruptedFinalQueryAsUnfinished() throws {
-        try withTemporaryArchive { url in
+    func testReloadMarksAnInterruptedFinalQueryAsUnfinished() async throws {
+        try await withTemporaryArchive { url in
             let original = record(startOffset: 0)
             let store = SessionStore(fileURL: url)
             store.append(original, completionNote: "최종 걸음 조회 중")
+            await store.flush()
             let reloaded = SessionStore(fileURL: url)
             XCTAssertEqual(reloaded.records, [original])
             XCTAssertEqual(reloaded.completionNote(for: original.id), "종료 시 수신값 · 이전 실행의 최종 조회 미완료")
         }
     }
 
-    private func withTemporaryArchive(_ body: (URL) throws -> Void) throws {
+    private func withTemporaryArchive(_ body: (URL) async throws -> Void) async throws {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("OrientationHapticsLabTests-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: directory) }
         // Nested path also verifies that the store creates its archive directory.
-        try body(directory.appendingPathComponent("archive", isDirectory: true).appendingPathComponent("sessions.json"))
+        try await body(directory.appendingPathComponent("archive", isDirectory: true).appendingPathComponent("sessions.json"))
     }
 
     private func record(id: UUID = UUID(), startOffset: TimeInterval) -> SessionRecord {

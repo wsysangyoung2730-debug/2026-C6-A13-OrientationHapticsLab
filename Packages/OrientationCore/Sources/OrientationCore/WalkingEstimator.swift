@@ -107,23 +107,23 @@ public struct WalkingEstimator: Sendable {
     public mutating func ingest(sample: WalkingSample, cycleID: UUID) -> WalkSnapshot? {
         guard cycleID == self.cycleID, sample.startDate == startedAt,
               sample.endDate.timeIntervalSinceReferenceDate.isFinite,
-              sample.endDate > startedAt, sample.endDate > (lastReportEnd ?? startedAt),
+              sample.endDate > startedAt, sample.endDate >= (lastReportEnd ?? startedAt),
               sample.steps >= snapshot.steps else { return nil }
-        if let distance = sample.distance {
-            guard distance.isFinite, distance >= 0 else { return nil }
-        }
-
-        let hasMovement = sample.steps > 0 || (sample.distance ?? 0) > 0
-        let source = selectedSource ?? (sample.distance != nil ? .systemEstimate : .strideEstimate)
+        // Step counts stay useful even when an optional distance estimate is missing or corrected.
+        let validDistance = sample.distance.flatMap { $0.isFinite && $0 >= 0 ? $0 : nil }
+        let hasMovement = sample.steps > 0 || (validDistance ?? 0) > 0
+        let source = selectedSource ?? (validDistance != nil ? .systemEstimate : .strideEstimate)
         let cumulativeDistance: Double?
         switch source {
         case .systemEstimate:
-            cumulativeDistance = sample.distance
+            cumulativeDistance = validDistance.flatMap { $0 >= lastCumulativeDistance ? $0 : nil }
         case .strideEstimate:
             cumulativeDistance = Double(sample.steps) * strideLength
         }
-        if let cumulativeDistance {
-            guard cumulativeDistance.isFinite, cumulativeDistance >= lastCumulativeDistance else { return nil }
+        if let lastReportEnd, sample.endDate == lastReportEnd,
+           sample.steps == snapshot.steps, (cumulativeDistance ?? lastCumulativeDistance) == lastCumulativeDistance { return nil }
+        if sample.distance != nil && (validDistance == nil || cumulativeDistance == nil) {
+            snapshot.isDisplacementUncertain = true
         }
         if selectedSource == nil && hasMovement {
             selectedSource = source

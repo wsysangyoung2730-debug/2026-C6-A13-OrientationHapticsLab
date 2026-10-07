@@ -9,10 +9,25 @@ struct HeadingSample: Sendable {
 }
 
 @MainActor
-final class MotionFeed {
+protocol HeadingFeed: AnyObject {
+    func start(onSample: @escaping @MainActor (HeadingSample) -> Void,
+               onError: @escaping @MainActor (String) -> Void)
+    func stop()
+}
+
+@MainActor
+final class MotionFeed: HeadingFeed {
+    private enum Event: Sendable { case sample(HeadingSample), error(String) }
     private let manager = CMMotionManager()
-    private var generation = UUID()
-    var isAvailable: Bool { manager.isDeviceMotionAvailable }
+    private let queue: OperationQueue = {
+        let queue = OperationQueue()
+        queue.name = "OrientationHapticsLab.motion"
+        queue.maxConcurrentOperationCount = 1
+        queue.qualityOfService = .userInitiated
+        return queue
+    }()
+    private var delivery: Task<Void, Never>?
+    private var continuation: AsyncStream<Event>.Continuation?
 
     func start(onSample: @escaping @MainActor (HeadingSample) -> Void,
                onError: @escaping @MainActor (String) -> Void) {
@@ -22,31 +37,38 @@ final class MotionFeed {
             onError("이 기기에서 방향 센서를 사용할 수 없어요.")
             return
         }
-        let current = generation
-        manager.deviceMotionUpdateInterval = 1.0 / 60.0
-        manager.startDeviceMotionUpdates(using: .xArbitraryZVertical, to: .main) { [weak self] data, error in
-            let message = error?.localizedDescription
-            let sample: HeadingSample?
-            if let data {
-                let r = data.attitude.rotationMatrix
-                let matrix = ReferenceToDeviceRotationMatrix(
-                    m11: r.m11, m12: r.m12, m13: r.m13,
-                    m21: r.m21, m22: r.m22, m23: r.m23,
-                    m31: r.m31, m32: r.m32, m33: r.m33)
-                sample = HeadingSample(
-                    heading: HeadingMath.screenOutwardHeadingDegrees(referenceToDevice: matrix),
-                    timestamp: data.timestamp, receivedAt: Date())
-            } else { sample = nil }
-            Task { @MainActor [weak self] in
-                guard self?.generation == current else { return }
-                if let message { onError(message) }
-                else if let sample { onSample(sample) }
+        // A busy UI receives the newest sample, not a backlog of obsolete 60 Hz callbacks.
+        let channel = AsyncStream<Event>.makeStream(bufferingPolicy: .bufferingNewest(1))
+        continuation = channel.continuation
+        delivery = Task {
+            for await event in channel.stream {
+                guard !Task.isCancelled else { break }
+                switch event {
+                case .sample(let sample): onSample(sample)
+                case .error(let message): onError(message)
+                }
             }
+        }
+        manager.deviceMotionUpdateInterval = 1.0 / 30.0
+        manager.startDeviceMotionUpdates(using: .xArbitraryZVertical, to: queue) { data, error in
+            if let error { channel.continuation.yield(.error(error.localizedDescription)); return }
+            guard let data else { return }
+            let r = data.attitude.rotationMatrix
+            let matrix = ReferenceToDeviceRotationMatrix(
+                m11: r.m11, m12: r.m12, m13: r.m13,
+                m21: r.m21, m22: r.m22, m23: r.m23,
+                m31: r.m31, m32: r.m32, m33: r.m33)
+            channel.continuation.yield(.sample(HeadingSample(
+                heading: HeadingMath.screenOutwardHeadingDegrees(referenceToDevice: matrix),
+                timestamp: data.timestamp, receivedAt: Date())))
         }
     }
 
     func stop() {
-        generation = UUID()
+        delivery?.cancel()
+        delivery = nil
+        continuation?.finish()
+        continuation = nil
         manager.stopDeviceMotionUpdates()
     }
 }
