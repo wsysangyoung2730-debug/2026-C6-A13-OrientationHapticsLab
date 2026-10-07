@@ -1,0 +1,24 @@
+name: Verify
+on:
+  pull_request:
+    branches: [develop, main]
+  push:
+    branches: [develop]
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Show Xcode version
+        run: xcodebuild -version
+      - name: Build calculation module
+        run: swift build --package-path Packages/OrientationCore
+      - name: Build iPhone app
+        run: >-
+          xcodebuild -project OrientationHapticsLab.xcodeproj
+          -scheme OrientationHapticsLab -sdk iphonesimulator
+          -destination 'generic/platform=iOS Simulator'
+          -derivedDataPath .build-results/DerivedData
+          CODE_SIGNING_ALLOWED=NO build
