@@ -98,7 +98,7 @@ final class HapticService: ObservableObject {
             .store(in: &subscriptions)
 
         guard supportsHaptics else {
-            status = "이 기기는 Core Haptics 진동을 지원하지 않음"
+            status = "이 기기는 진동을 지원하지 않아요."
             return
         }
         // Create early, before the first angle crossing, to reduce startup latency.
