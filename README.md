@@ -1,6 +1,6 @@
 # OrientationHapticsLab
 
-허리에 세로로 고정한 아이폰으로 **리셋한 방향에서 얼마나 회전했는지** 측정하고, 각도마다 다른 진동을 보내는 실험 앱입니다. 개발 중인 앱은 [`develop`](https://github.com/wsysangyoung2730-debug/2026-C6-A13-OrientationHapticsLab/tree/develop)에서 확인하세요.
+허리에 세로로 고정한 아이폰으로 **리셋한 방향에서 얼마나 회전했는지** 측정하고, 각도마다 진동·음성·비프음 중 선택한 신호를 보내는 실험 앱입니다. 개발 중인 앱은 [`develop`](https://github.com/wsysangyoung2730-debug/2026-C6-A13-OrientationHapticsLab/tree/develop)에서 확인하세요.
 
 ## 실행
 
@@ -17,12 +17,27 @@
 
 - 중력 기준 수평면에서 기기의 화면 정면 방향을 구해 상대 회전각 표시
 - 왼쪽은 음수, 오른쪽은 양수. UI에는 방향과 각도를 함께 표시
-- 좌우 30°·45°·90° 진입/통과 시 진동, 경계 흔들림 중 중복 방지
+- 좌우 30°·45°·90° 진입/통과 시 선택한 신호, 경계 흔들림 중 중복 방지
+- 신호 방식으로 진동·음성·비프음 중 하나를 선택하고 저장
 - 각도별 사용 여부, 진동 패턴, 세기, 선명도를 설정하고 저장
-- 진동 신호 재생 동안 각도별 단색 전체 화면과 큰 방향·각도 표시
+- 선택한 신호 재생 동안 각도별 단색 전체 화면과 큰 방향·각도 표시
 - 버튼 리셋 시 이전 사이클 로그 저장, 방향·걸음·추정 거리와 좌표 초기화
 - 걸음 수, 추정 이동 거리, 초기 방향 기준 전방/오른쪽 좌표 표시
-- 로그와 진동 이력 기기 내 저장 및 확인
+- 로그와 신호 이력 기기 내 저장 및 확인
+
+## 신호 방식 선택
+
+설정 상단의 **진동 / 음성 / 비프음**에서 한 가지를 선택합니다. 모든 각도 도달, 각도별 체험 버튼, 기준 리셋 완료에 적용됩니다. 앱을 다시 열어도 선택을 유지하며, 기존 진동 패턴 설정도 보존합니다.
+
+| 방식 | 각도 도달 | 리셋 완료 |
+| --- | --- | --- |
+| 진동 | 각도별로 저장한 패턴·세기·선명도 | 부드러운 긴 진동 두 번 |
+| 음성 | 한국어로 “왼쪽 30도”처럼 방향·각도 읽기 | “기준 방향을 0도로 설정했어요” |
+| 비프음 | 왼쪽 440Hz / 오른쪽 880Hz, 30° 1회 / 45° 2회 / 90° 3회 | 660Hz의 긴 소리 한 번 |
+
+소리 크기는 아이폰의 미디어 음량으로 조절합니다. 음량이 0이면 안내를 표시합니다. 무음 모드에서도 소리가 나며 연결된 이어폰이 있으면 현재 오디오 출력 경로를 사용합니다. 새로운 각도는 이전 신호를 중단하고 즉시 교체합니다. 앱 중단이나 이어폰 연결 해제 시 재생을 멈추며, 끝난 신호를 자동으로 다시 재생하지 않습니다.
+
+세 방식 모두 재생 중 전체 화면 색상 신호를 표시합니다. 시뮬레이터에서는 음성·비프음 재생을 시도할 수 있지만 진동은 화면 미리보기만 제공합니다. 실제 출력 음량, 음성 가용성, 공연장 소음 속 식별 가능성은 아이폰에서 확인해야 합니다.
 
 ## 화면 예시
 
@@ -63,7 +78,7 @@ xcodebuild -project OrientationHapticsLab.xcodeproj \
 터미널이 Command Line Tools를 선택한 Mac에서는 `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer`를 설정하고 `xcrun swift`를 사용합니다.
 
 - 계산 테스트: 착용 방향·기울기, 좌우 부호, ±180° 경계, 각도 진입/통과·재진입, 지연된 걸음 자료, 사이클 분리, 로그 직렬화
-- 앱 테스트: 설정 저장·복원, 손상 데이터 처리, 이전 로그 보정·보존 (15개)
+- 앱 테스트: 설정 저장·복원, 기존 설정 호환, 신호 전환·중단, 음성 문구·비프음 파일, 이전 로그 보정·보존 (25개)
 - 자동 빌드: develop 대상 PR 및 develop 변경 시 GitHub Actions 실행
 - 현장 검증: [착용 검증 절차](docs/field-validation.md)
 - 브랜치와 커밋: [Git 작업 규칙](CONTRIBUTING.md)
@@ -73,7 +88,7 @@ xcodebuild -project OrientationHapticsLab.xcodeproj \
 2026-10-07 기준:
 
 - 방향·각도·걸음 계산 테스트 28개 통과
-- iOS 26.3 시뮬레이터에서 설정·로그 저장 테스트 15개 통과
+- iOS 26.3 시뮬레이터에서 설정·로그 저장·신호 전환·비프음 테스트 25개 통과
 - Xcode 27에서 iOS 26 최소 지원 설정으로 앱 빌드 성공
 - 설정 목록과 전체 화면 신호의 실제 렌더링 확인
 - 실제 아이폰의 허리 착용 오차, 진동 식별률, 보행 정확도는 **미측정**
@@ -81,7 +96,7 @@ xcodebuild -project OrientationHapticsLab.xcodeproj \
 ## 구현 구조
 
 - `Packages/OrientationCore`: 기기 API와 분리된 방향·각도 감지·걸음 추정·기록 모델
-- `OrientationHapticsLab`: Core Motion, Core Haptics, 저장소와 SwiftUI 화면
+- `OrientationHapticsLab`: Core Motion, Core Haptics, AVFoundation 음성·비프음, 저장소와 SwiftUI 화면
 - 센서의 측정 시각과 작업 세대를 검사해 오래된 콜백이 새 사이클을 변경하지 않도록 처리
 
 ## 참고
@@ -91,3 +106,6 @@ xcodebuild -project OrientationHapticsLab.xcodeproj \
 - [Apple: 처리된 기기 동작 데이터](https://developer.apple.com/documentation/coremotion/getting-processed-device-motion-data)
 - [Apple: Core Haptics](https://developer.apple.com/documentation/corehaptics)
 - [Apple: CMPedometer](https://developer.apple.com/documentation/coremotion/cmpedometer)
+
+- [Apple: AVSpeechSynthesizer](https://developer.apple.com/documentation/avfaudio/avspeechsynthesizer)
+- [Apple: 오디오 중단 처리](https://developer.apple.com/documentation/avfaudio/handling-audio-interruptions)
