@@ -68,6 +68,16 @@ xcodebuild -project OrientationHapticsLab.xcodeproj \
 - 현장 검증: [착용 검증 절차](docs/field-validation.md)
 - 브랜치와 커밋: [Git 작업 규칙](CONTRIBUTING.md)
 
+## 구현 검증 기록
+
+2026-10-07 기준:
+
+- 방향·각도·걸음 계산 테스트 28개 통과
+- iOS 26.3 시뮬레이터에서 설정·로그 저장 테스트 15개 통과
+- Xcode 27에서 iOS 26 최소 지원 설정으로 앱 빌드 성공
+- 설정 목록과 전체 화면 신호의 실제 렌더링 확인
+- 실제 아이폰의 허리 착용 오차, 진동 식별률, 보행 정확도는 **미측정**
+
 ## 구현 구조
 
 - `Packages/OrientationCore`: 기기 API와 분리된 방향·각도 감지·걸음 추정·기록 모델
