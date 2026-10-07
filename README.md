@@ -79,8 +79,9 @@ xcodebuild -project OrientationHapticsLab.xcodeproj \
 터미널이 Command Line Tools를 선택한 Mac에서는 `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer`를 설정하고 `xcrun swift`를 사용합니다.
 
 - 계산 테스트: 착용 방향·기울기, 좌우 부호, ±180° 경계, 각도 진입/통과·재진입, 지연된 걸음 자료, 사이클 분리, 로그 직렬화
-- 앱 테스트: 설정 저장·복원, 기존 설정 호환, 신호 전환·중단, 음성 문구·비프음 파일, 이전 로그 보정·보존, 진동 응답 지연·취소, 권한 팝업·방향 누락·반복 리셋 (32개)
+- 앱 테스트: 설정 저장·복원, 기존 설정 호환, 신호 전환·중단, 음성 문구·비프음 파일, 이전 로그 보정·보존, 진동 응답 지연·취소, 권한 팝업·방향 누락·반복 리셋, SDK 콜백 실행 영역 (35개)
 - 자동 빌드: develop 대상 PR 및 develop 변경 시 GitHub Actions 실행
+- 실기기 첫 실행 크래시: [원인과 콜백 실행 영역 수정](docs/startup-crash.md)
 - 리셋·걸음 문제: [원인 분석과 개선·검증 기록](docs/reset-and-steps.md)
 - 현장 검증: [착용 검증 절차](docs/field-validation.md)
 - 브랜치와 커밋: [Git 작업 규칙](CONTRIBUTING.md)
@@ -90,7 +91,7 @@ xcodebuild -project OrientationHapticsLab.xcodeproj \
 2026-10-07 기준:
 
 - 방향·각도·걸음 계산 테스트 30개 통과
-- iOS 26.3 시뮬레이터에서 설정·로그 저장·신호 전환·리셋과 걸음 처리 테스트 32개 통과
+- iOS 26.3 시뮬레이터에서 설정·로그 저장·신호 전환·리셋과 걸음 처리 테스트 35개 통과
 - Xcode 27에서 iOS 26 최소 지원 설정으로 앱 빌드 성공
 - 설정 목록과 전체 화면 신호의 실제 렌더링 확인
 - 실제 아이폰의 허리 착용 오차, 진동 식별률, 보행 정확도는 **미측정**
