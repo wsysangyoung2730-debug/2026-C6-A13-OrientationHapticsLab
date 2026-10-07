@@ -5,14 +5,14 @@ import UIKit
 
 @MainActor
 final class LabModel: ObservableObject {
-    let signals = SignalService()
-    let sessionStore = SessionStore()
-    let settings = HapticSettingsStore()
+    let signals: SignalService
+    let sessionStore: SessionStore
+    let settings: HapticSettingsStore
     @Published private(set) var simulatedSignalAngle: Int?
     private var simulatedSignalTask: Task<Void, Never>?
     @Published private(set) var walk = WalkSnapshot()
     @Published private(set) var stepStatus = "기준을 리셋하면 걸음 집계를 시작합니다."
-    private let pedometer = PedometerFeed()
+    private let pedometer: any WalkingFeed
     private var walkingEstimator: WalkingEstimator?
     private var lastWalkHeadingAt: Date?
     private var hapticEvents: [HapticEventRecord] = []
@@ -25,19 +25,35 @@ final class LabModel: ObservableObject {
     @Published private(set) var cycleNumber = 0
     @Published private(set) var lastSignal = "아직 신호 없음"
     @Published private(set) var enabledAngles = Set(AngleCue.defaults.map(\.id))
-    private let feed = MotionFeed()
+    private let feed: any HeadingFeed
     private var tracker = RelativeHeadingTracker()
     private var detector = AngleLandmarkDetector()
     private var latestSample: HeadingSample?
     private var watchdog: Task<Void, Never>?
     private var editing = false
 
-    var isSimulation: Bool {
+    let isSimulation: Bool
+    private var appActive = true
+
+    init(signals: SignalService = SignalService(), sessionStore: SessionStore = SessionStore(),
+         settings: HapticSettingsStore = HapticSettingsStore(), pedometer: any WalkingFeed = PedometerFeed(),
+         feed: any HeadingFeed = MotionFeed(), simulation: Bool? = nil) {
+        self.signals = signals
+        self.sessionStore = sessionStore
+        self.settings = settings
+        self.pedometer = pedometer
+        self.feed = feed
         #if targetEnvironment(simulator)
-        true
+        isSimulation = simulation ?? true
         #else
-        false
+        isSimulation = simulation ?? false
         #endif
+    }
+
+    /// Permission alerts temporarily deactivate the scene; they must not end a walking cycle.
+    func setAppActive(_ active: Bool) {
+        appActive = active
+        if !active { clearSimulatedSignal(); signals.stop() }
     }
 
     var directionLabel: String {
@@ -62,7 +78,8 @@ final class LabModel: ObservableObject {
             while !Task.isCancelled {
                 try? await Task.sleep(for: .milliseconds(500))
                 guard !Task.isCancelled, let self else { return }
-                if let sample = self.latestSample, Date().timeIntervalSince(sample.receivedAt) > 1 {
+                if self.appActive, self.isCalibrated, let sample = self.latestSample,
+                   ProcessInfo.processInfo.systemUptime - sample.timestamp > 1 {
                     self.invalidateReference(message: "방향 수신이 끊겼어요. 다시 기준을 설정해 주세요.")
                     self.latestSample = nil
                 }
@@ -93,7 +110,6 @@ final class LabModel: ObservableObject {
         clearSimulatedSignal()
         let resetDate = Date()
         archiveCycle(reason: .reset, at: resetDate)
-        signals.stop()
         detector.reset()
         _ = detector.update(relativeDegrees: 0)
         relativeDegrees = 0
@@ -155,16 +171,16 @@ final class LabModel: ObservableObject {
     }
 
     private func consume(_ sample: HeadingSample) {
-        guard isRunning else { return }
+        guard isRunning, appActive else { return }
         if !isSimulation {
             guard sample.timestamp.isFinite,
                   (0..<0.5).contains(ProcessInfo.processInfo.systemUptime - sample.timestamp) else {
-                invalidateReference(message: "방향 자료가 늦게 도착했어요. 기준을 다시 설정해 주세요.")
+                // Ignore one stale callback. A UI delay is not evidence of a stopped pedometer.
                 return
             }
             if let previous = latestSample, sample.timestamp <= previous.timestamp { return }
         }
-        if !isSimulation, let previous = latestSample, sample.timestamp - previous.timestamp > 0.5 {
+        if !isSimulation, let previous = latestSample, sample.timestamp - previous.timestamp > 1 {
             invalidateReference(message: "방향 측정이 중단됐어요. 기준을 다시 설정해 주세요.")
         }
         latestSample = sample
@@ -193,7 +209,7 @@ final class LabModel: ObservableObject {
 
     private func invalidateReference(message: String) {
         clearSimulatedSignal()
-        archiveCycle(reason: .appInterrupted)
+        // A lost heading only invalidates direction. Continue counting steps in this cycle.
         tracker.clear()
         detector.reset()
         signals.stop()
@@ -242,8 +258,8 @@ final class LabModel: ObservableObject {
     }
 
     private func archiveCycle(reason: SessionEndReason, at endDate: Date = Date()) {
-        pedometer.stop()
         guard let estimator = walkingEstimator else { return }
+        pedometer.stop()
         // Clear the live identity before starting any asynchronous final query.
         walkingEstimator = nil
         lastWalkHeadingAt = nil

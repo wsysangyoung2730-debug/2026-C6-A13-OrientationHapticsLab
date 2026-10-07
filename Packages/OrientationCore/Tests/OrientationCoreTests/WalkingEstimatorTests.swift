@@ -126,8 +126,6 @@ func invalidReportsAreAtomic() throws {
     let baseline = try #require(baselineResult)
     let acceptedCondition3 = estimator.ingest(sample: sample(2, steps: 3, distance: 4), cycleID: id) == nil
     #expect(acceptedCondition3)
-    let acceptedCondition4 = estimator.ingest(sample: sample(2, steps: 5, distance: 2), cycleID: id) == nil
-    #expect(acceptedCondition4)
     let acceptedCondition5 = estimator.ingest(sample: sample(1, steps: 4, distance: 3), cycleID: id) == nil
     #expect(acceptedCondition5)
     let acceptedCondition6 = estimator.ingest(sample: WalkingSample(startDate: time(-1), endDate: time(2), steps: 5, distance: 4), cycleID: id) == nil
@@ -189,4 +187,28 @@ func sessionSerialization() throws {
     let data = try JSONEncoder().encode(record)
     #expect(try JSONDecoder().decode(SessionRecord.self, from: data) == record)
     #expect(record.duration == 4)
+}
+
+@Test("A corrected distance does not discard valid new steps")
+func distanceCorrectionKeepsSteps() throws {
+    let id = UUID()
+    var estimator = WalkingEstimator(cycleID: id, startedAt: origin)
+    _ = estimator.ingest(sample: sample(1, steps: 4, distance: 3), cycleID: id)
+    let result = estimator.ingest(sample: sample(2, steps: 7, distance: 2), cycleID: id)
+    let report = try #require(result)
+    #expect(report.steps == 7)
+    #expect(report.estimatedDistance == 3)
+    #expect(report.isDisplacementUncertain)
+}
+
+@Test("Same-time corrected counts and unavailable distance still update steps")
+func revisedCountAtSameTime() throws {
+    let id = UUID()
+    var estimator = WalkingEstimator(cycleID: id, startedAt: origin)
+    _ = estimator.ingest(sample: sample(1, steps: 0, distance: 0), cycleID: id)
+    let result = estimator.ingest(sample: sample(1, steps: 7, distance: .nan), cycleID: id)
+    let report = try #require(result)
+    #expect(report.steps == 7)
+    #expect(report.source == .strideEstimate)
+    #expect(report.isDisplacementUncertain)
 }

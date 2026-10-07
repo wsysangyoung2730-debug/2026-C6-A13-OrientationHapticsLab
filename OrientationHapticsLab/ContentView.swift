@@ -69,8 +69,9 @@ struct ContentView: View {
             #endif
         }
         .onChange(of: scenePhase) { _, phase in
+            model.setAppActive(phase == .active)
             if phase == .active { model.start() }
-            else { model.stop(reason: .appInterrupted) }
+            else if phase == .background { model.stop(reason: .appInterrupted) }
         }
     }
 
