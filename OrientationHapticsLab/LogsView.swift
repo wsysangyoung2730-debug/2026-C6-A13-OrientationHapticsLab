@@ -56,7 +56,7 @@ private struct SessionDetailView: View {
                     WalkMetricsView(snapshot: record.walk, status: store.completionNote(for: record.id))
                     GroupBox("신호 요청 기록 \(record.hapticEvents.count)개") {
                         VStack(alignment: .leading, spacing: 12) {
-                            Text("기기가 재생 명령을 수락한 기록입니다. 착용자가 실제로 인지했는지는 현장에서 확인해야 합니다.")
+                            Text("앱이 신호 요청을 받은 기록입니다. 장치 응답 지연이나 중단으로 실제 출력되지 않을 수 있어요. 착용자가 실제로 인지했는지는 현장에서 확인해야 합니다.")
                                 .font(.caption).foregroundStyle(.secondary)
                             if record.hapticEvents.isEmpty {
                                 Text("수락된 신호 요청 없음").foregroundStyle(.secondary)
