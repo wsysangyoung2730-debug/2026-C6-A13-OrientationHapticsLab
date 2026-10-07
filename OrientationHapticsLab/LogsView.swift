@@ -54,12 +54,12 @@ private struct SessionDetailView: View {
                         }
                     }
                     WalkMetricsView(snapshot: record.walk, status: store.completionNote(for: record.id))
-                    GroupBox("진동 요청 기록 \(record.hapticEvents.count)개") {
+                    GroupBox("신호 요청 기록 \(record.hapticEvents.count)개") {
                         VStack(alignment: .leading, spacing: 12) {
-                            Text("기기가 재생 명령을 수락한 기록입니다. 착용자가 실제로 느꼈는지는 현장에서 확인해야 합니다.")
+                            Text("기기가 재생 명령을 수락한 기록입니다. 착용자가 실제로 인지했는지는 현장에서 확인해야 합니다.")
                                 .font(.caption).foregroundStyle(.secondary)
                             if record.hapticEvents.isEmpty {
-                                Text("수락된 진동 요청 없음").foregroundStyle(.secondary)
+                                Text("수락된 신호 요청 없음").foregroundStyle(.secondary)
                             }
                             ForEach(record.hapticEvents) { event in
                                 VStack(alignment: .leading, spacing: 4) {
@@ -79,7 +79,7 @@ private struct SessionDetailView: View {
     }
 
     private func eventLabel(_ event: HapticEventRecord) -> String {
-        if event.patternID == "reset" { return "기준 방향 리셋 진동" }
+        if event.patternID.hasPrefix("reset") { return "기준 방향 리셋 신호" }
         return "\(angleText(event.triggerAngleDegrees)) \(event.patternID.hasPrefix("preview") ? "체험" : "도달") 신호"
     }
 }

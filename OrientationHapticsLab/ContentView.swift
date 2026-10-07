@@ -13,7 +13,7 @@ struct ContentView: View {
             ScrollView {
                 VStack(spacing: 18) {
                     headingCard
-                    HapticStatusView(haptics: model.haptics)
+                    SignalStatusView(signals: model.signals)
                     controls
                     WalkMetricsView(snapshot: model.walk, status: model.stepStatus)
                     StorageStatusView(store: model.sessionStore)
@@ -23,7 +23,7 @@ struct ContentView: View {
                 }.padding()
             }
             .background(Color(.systemGroupedBackground))
-            .navigationTitle("방향 진동 실험")
+            .navigationTitle("방향 신호 실험")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
@@ -34,14 +34,14 @@ struct ContentView: View {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { showSettings = true } label: {
                         Label("설정", systemImage: "slider.horizontal.3")
-                    }.accessibilityLabel("각도별 진동 설정")
+                    }.accessibilityLabel("신호 설정")
                 }
             }
         }
-        .overlay { ActiveSignalLayer(model: model, haptics: model.haptics) }
+        .overlay { ActiveSignalLayer(model: model, signals: model.signals) }
         .fullScreenCover(isPresented: $showSettings) {
-            SettingsView(store: model.settings, haptics: model.haptics) { model.preview($0) }
-                .overlay { ActiveSignalLayer(model: model, haptics: model.haptics, isPreview: true) }
+            SettingsView(store: model.settings, signals: model.signals) { model.preview($0) }
+                .overlay { ActiveSignalLayer(model: model, signals: model.signals, isPreview: true) }
         }
         .fullScreenCover(isPresented: $showLogs) {
             NavigationStack {
@@ -57,6 +57,9 @@ struct ContentView: View {
         .onChange(of: showLogs) { _, _ in model.setEditing(showSettings || showLogs) }
         .onReceive(model.settings.$settings) { _ in
             // Published values arrive before the property is stored. Apply on the next main-actor turn.
+            Task { @MainActor in model.applySettings() }
+        }
+        .onReceive(model.settings.$signalMode) { _ in
             Task { @MainActor in model.applySettings() }
         }
         .task {
@@ -111,7 +114,7 @@ struct ContentView: View {
                 Text("가상 방향 \(simulatedHeading, specifier: "%.0f")°")
                 HStack {
                     ForEach([-30, 30, 90], id: \.self) { angle in
-                        Button("\(angle)° 화면") { model.preview(AngleCue(signedDegrees: angle)) }
+                        Button("\(angle)° 체험") { model.preview(AngleCue(signedDegrees: angle)) }
                             .buttonStyle(.bordered)
                     }
                 }
@@ -122,7 +125,7 @@ struct ContentView: View {
 
 private struct ActiveSignalLayer: View {
     @ObservedObject var model: LabModel
-    @ObservedObject var haptics: HapticService
+    @ObservedObject var signals: SignalService
     var isPreview = false
 
     private var snapshotAngle: Int? {
@@ -135,11 +138,11 @@ private struct ActiveSignalLayer: View {
     }
 
     var body: some View {
-        if let angle = haptics.currentlyPlayingAngle.map({ Int($0.rounded()) }) ?? model.simulatedSignalAngle ?? snapshotAngle {
+        if let angle = signals.state.angle.map({ Int($0.rounded()) }) ?? model.simulatedSignalAngle ?? snapshotAngle {
             SignalOverlay(angle: angle, currentAngle: snapshotAngle.map(Double.init) ?? model.relativeDegrees,
-                          isPreview: isPreview || model.isSimulation)
+                          isPreview: isPreview || model.isSimulation, mode: signals.mode)
                 .overlay(alignment: .bottom) {
-                    if model.isSimulation {
+                    if model.isSimulation, signals.mode == .haptic {
                         Text("시뮬레이터 · 실제 진동 없음")
                             .font(.footnote.bold())
                             .foregroundStyle(SignalOverlay.foregroundColor(for: angle))
@@ -152,12 +155,13 @@ private struct ActiveSignalLayer: View {
     }
 }
 
-private struct HapticStatusView: View {
-    @ObservedObject var haptics: HapticService
+private struct SignalStatusView: View {
+    @ObservedObject var signals: SignalService
     var body: some View {
         VStack(spacing: 4) {
-            Text(haptics.currentlyPlaying.map { "신호: \($0)" } ?? "각도 신호 대기").font(.headline)
-            Text(haptics.lastError ?? haptics.status).font(.caption).foregroundStyle(.secondary)
+            Text("신호 방식: \(signals.mode.title)").font(.subheadline.bold())
+            Text(signals.state.label.map { "신호: \($0)" } ?? "각도 신호 대기").font(.headline)
+            Text(signals.state.error ?? signals.state.status).font(.caption).foregroundStyle(.secondary)
         }.accessibilityElement(children: .combine)
     }
 }
