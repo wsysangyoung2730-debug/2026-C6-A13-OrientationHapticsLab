@@ -6,6 +6,13 @@ import UIKit
 @MainActor
 final class LabModel: ObservableObject {
     let haptics = HapticService()
+    let sessionStore = SessionStore()
+    @Published private(set) var walk = WalkSnapshot()
+    @Published private(set) var stepStatus = "기준을 리셋하면 걸음 집계를 시작합니다."
+    private let pedometer = PedometerFeed()
+    private var walkingEstimator: WalkingEstimator?
+    private var lastWalkHeadingAt: Date?
+    private var hapticEvents: [HapticEventRecord] = []
     @Published private(set) var relativeDegrees: Double = 0
     @Published private(set) var continuousDegrees: Double = 0
     @Published private(set) var isCalibrated = false
@@ -59,7 +66,8 @@ final class LabModel: ObservableObject {
         }
     }
 
-    func stop() {
+    func stop(reason: SessionEndReason = .stopped) {
+        archiveCycle(reason: reason)
         feed.stop()
         watchdog?.cancel()
         watchdog = nil
@@ -77,6 +85,8 @@ final class LabModel: ObservableObject {
             status = "안정적인 방향을 받은 후 다시 눌러 주세요."
             return
         }
+        let resetDate = Date()
+        archiveCycle(reason: .reset, at: resetDate)
         haptics.stop()
         detector.reset()
         _ = detector.update(relativeDegrees: 0)
@@ -86,7 +96,8 @@ final class LabModel: ObservableObject {
         isCalibrated = true
         status = "현재 방향을 0°로 설정했어요."
         lastSignal = "기준 방향 리셋"
-        haptics.playReset()
+        startWalkingCycle(at: resetDate)
+        if haptics.playReset() { recordHaptic(trigger: 0, patternID: "reset") }
     }
 
     func setEnabled(_ angle: Int, enabled: Bool) {
@@ -103,7 +114,9 @@ final class LabModel: ObservableObject {
     }
 
     func preview(_ cue: AngleCue) {
-        haptics.playAngle(Double(cue.signedDegrees))
+        if haptics.playAngle(Double(cue.signedDegrees)) {
+            recordHaptic(trigger: Double(cue.signedDegrees), patternID: "preview-directional-\(cue.signedDegrees)")
+        }
     }
 
     func simulate(heading: Double) {
@@ -136,23 +149,94 @@ final class LabModel: ObservableObject {
         }
         relativeDegrees = reading.relativeDegrees
         continuousDegrees = reading.continuousDegrees
+        recordWalkingHeading(sample)
         if !editing, let cue = detector.update(relativeDegrees: relativeDegrees) {
             lastSignal = cue.label
-            haptics.playAngle(Double(cue.signedDegrees))
+            if haptics.playAngle(Double(cue.signedDegrees)) {
+                recordHaptic(trigger: Double(cue.signedDegrees), patternID: "directional-\(cue.signedDegrees)")
+            }
         }
     }
 
     private func sensorFailed(_ message: String) {
-        stop()
+        stop(reason: .appInterrupted)
         status = "센서 오류: \(message)"
     }
 
     private func invalidateReference(message: String) {
+        archiveCycle(reason: .appInterrupted)
         tracker.clear()
         detector.reset()
         haptics.stop()
         isCalibrated = false
         canReset = false
         status = message
+    }
+
+    private func startWalkingCycle(at date: Date) {
+        let id = UUID()
+        walkingEstimator = WalkingEstimator(cycleID: id, startedAt: date)
+        lastWalkHeadingAt = date
+        hapticEvents = []
+        walk = WalkSnapshot()
+        if isSimulation {
+            stepStatus = "시뮬레이터 · 실제 걸음 센서 없음"
+            return
+        }
+        pedometer.start(cycleID: id, from: date, onSample: { [weak self] sample in
+            guard let self, self.walkingEstimator?.cycleID == id,
+                  let snapshot = self.walkingEstimator?.ingest(sample: sample, cycleID: id) else { return }
+            self.walk = snapshot
+        }, onStatus: { [weak self] message in
+            guard self?.walkingEstimator?.cycleID == id else { return }
+            self?.stepStatus = message
+        })
+    }
+
+    private func recordWalkingHeading(_ sample: HeadingSample) {
+        guard isCalibrated, let id = walkingEstimator?.cycleID else { return }
+        // Use the sensor timestamp's age to align headings with pedometer wall-clock intervals.
+        let age = max(0, ProcessInfo.processInfo.systemUptime - sample.timestamp)
+        let date = Date().addingTimeInterval(-age)
+        guard lastWalkHeadingAt.map({ date.timeIntervalSince($0) >= 0.1 }) ?? true else { return }
+        if walkingEstimator?.recordHeading(degrees: relativeDegrees, at: date, cycleID: id) == true {
+            lastWalkHeadingAt = date
+        }
+    }
+
+    private func recordHaptic(trigger: Double, patternID: String) {
+        guard isCalibrated, walkingEstimator != nil else { return }
+        hapticEvents.append(HapticEventRecord(
+            date: Date(), headingDegrees: relativeDegrees,
+            triggerAngleDegrees: trigger, patternID: patternID
+        ))
+    }
+
+    private func archiveCycle(reason: SessionEndReason, at endDate: Date = Date()) {
+        pedometer.stop()
+        guard let estimator = walkingEstimator else { return }
+        // Clear the live identity before starting any asynchronous final query.
+        walkingEstimator = nil
+        lastWalkHeadingAt = nil
+        let record = SessionRecord(
+            id: estimator.cycleID, startedAt: estimator.startedAt, endedAt: endDate,
+            endReason: reason, lastAngleDegrees: relativeDegrees,
+            hapticEvents: hapticEvents, walk: estimator.snapshot
+        )
+        sessionStore.append(record, completionNote: isSimulation ? "시뮬레이터 · 걸음 센서 미사용" : "최종 걸음 조회 중")
+        hapticEvents = []
+        stepStatus = "사이클 종료 · 마지막 수신값은 로그에 보관됩니다."
+        guard !isSimulation else { return }
+        pedometer.queryFinal(cycleID: estimator.cycleID, from: estimator.startedAt, to: endDate) { [weak self] sample, errorMessage in
+            guard let self else { return }
+            var savedEstimator = estimator
+            if let sample, let finalized = savedEstimator.ingest(sample: sample, cycleID: estimator.cycleID) {
+                self.sessionStore.reconcile(id: estimator.cycleID, walk: finalized,
+                                            completionNote: "종료 구간 최종 조회 반영 · 센서 처리 지연에 따른 오차 가능")
+            } else {
+                self.sessionStore.reconcile(id: estimator.cycleID, walk: nil,
+                                            completionNote: errorMessage ?? "종료 시 수신값 유지 · 최종 조회가 없거나 기존 값보다 오래됨")
+            }
+        }
     }
 }

@@ -32,6 +32,7 @@ struct ContentView: View {
                     Button(model.isRunning ? "측정 중지" : "측정 시작") {
                         if model.isRunning { model.stop() } else { model.start() }
                     }.buttonStyle(.bordered)
+                    WalkMetricsView(snapshot: model.walk, status: model.stepStatus)
                     GroupBox("각도 신호 체험") {
                         VStack(spacing: 12) {
                             ForEach(AngleCue.defaults) { cue in
@@ -61,11 +62,18 @@ struct ContentView: View {
             .background(Color(.systemGroupedBackground))
             .navigationTitle("방향 진동 실험")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    NavigationLink { LogsView(store: model.sessionStore) } label: {
+                        Label("로그", systemImage: "clock.arrow.circlepath")
+                    }
+                }
+            }
         }
         .task { model.start() }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { model.start() }
-            else { model.stop() }
+            else { model.stop(reason: .appInterrupted) }
         }
     }
 }
