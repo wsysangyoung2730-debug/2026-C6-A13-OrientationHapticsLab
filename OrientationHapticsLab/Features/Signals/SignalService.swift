@@ -12,10 +12,15 @@ struct SignalPlaybackState: Equatable {
 protocol SignalOutput: AnyObject {
     var state: SignalPlaybackState { get }
     var statePublisher: AnyPublisher<SignalPlaybackState, Never> { get }
+    func setSpeechStyle(_ style: SpeechStyle)
     func prepare()
     @discardableResult func playAngle(_ signedDegrees: Double, configuration: HapticConfiguration?) -> Bool
     @discardableResult func playReset() -> Bool
     func stop()
+}
+
+extension SignalOutput {
+    func setSpeechStyle(_ style: SpeechStyle) {}
 }
 
 extension HapticService: SignalOutput {
@@ -33,6 +38,7 @@ extension HapticService: SignalOutput {
 /// Exactly one selected output receives commands; switching also cancels its active signal.
 @MainActor
 final class SignalService: ObservableObject {
+    @Published private(set) var speechStyle: SpeechStyle = .angle
     @Published private(set) var mode: SignalMode
     @Published private(set) var state: SignalPlaybackState
     private let outputs: [SignalMode: any SignalOutput]
@@ -53,6 +59,12 @@ final class SignalService: ObservableObject {
         self.mode = mode
         state = outputs[mode]!.state
         observeSelectedOutput()
+    }
+
+    func setSpeechStyle(_ style: SpeechStyle) {
+        guard style != speechStyle else { return }
+        speechStyle = style
+        outputs[.speech]?.setSpeechStyle(style)
     }
 
     func setMode(_ newMode: SignalMode) {
@@ -78,7 +90,7 @@ final class SignalService: ObservableObject {
     func description(for angle: Int, configuration: HapticConfiguration) -> String {
         switch mode {
         case .haptic: configuration.describe
-        case .speech: AudioCue.angle(Double(angle))?.speech ?? "지원하지 않는 각도"
+        case .speech: AudioCue.angle(Double(angle), speechStyle: speechStyle)?.speech ?? "지원하지 않는 각도"
         case .beep: AudioCue.angle(Double(angle))?.beepDescription ?? "지원하지 않는 각도"
         }
     }

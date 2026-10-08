@@ -16,6 +16,7 @@ final class LabModel: ObservableObject {
     private var walkingEstimator: WalkingEstimator?
     private var lastWalkHeadingAt: Date?
     private var hapticEvents: [HapticEventRecord] = []
+    @Published private(set) var displayMode: DirectionDisplayMode = .angle
     @Published private(set) var relativeDegrees: Double = 0
     @Published private(set) var continuousDegrees: Double = 0
     @Published private(set) var isCalibrated = false
@@ -117,16 +118,19 @@ final class LabModel: ObservableObject {
         continuousDegrees = 0
         cycleNumber += 1
         isCalibrated = true
-        status = "현재 방향을 0°로 설정했어요."
-        UIAccessibility.post(notification: .announcement, argument: status)
+        status = settings.displayMode == .clock ? "현재 방향을 12시로 설정했어요." : "현재 방향을 0°로 설정했어요."
+        // Speech output already announces reset; do not speak the same confirmation twice.
+        if settings.signalMode != .speech { UIAccessibility.post(notification: .announcement, argument: status) }
         lastSignal = "기준 방향 리셋"
         startWalkingCycle(at: resetDate)
         if signals.playReset() { recordSignal(trigger: 0, patternID: "reset: \(signals.mode.title)") }
     }
 
     func applySettings() {
+        displayMode = settings.displayMode
         if signals.mode != settings.signalMode { clearSimulatedSignal() }
         signals.setMode(settings.signalMode)
+        signals.setSpeechStyle(settings.speechStyle)
         enabledAngles = settings.enabledAngles
         detector.setCues(AngleCue.defaults.filter { enabledAngles.contains($0.id) })
         if isCalibrated { _ = detector.update(relativeDegrees: relativeDegrees) }
@@ -146,10 +150,11 @@ final class LabModel: ObservableObject {
 
     private func playCue(_ cue: AngleCue, isPreview: Bool = false) {
         signals.setMode(settings.signalMode)
+        signals.setSpeechStyle(settings.speechStyle)
         let configuration = settings.configuration(for: cue.signedDegrees)
         if signals.playAngle(Double(cue.signedDegrees), configuration: configuration) {
             recordSignal(trigger: Double(cue.signedDegrees),
-                         patternID: "\(isPreview ? "preview: " : "")\(signals.mode.title): \(signals.description(for: cue.signedDegrees, configuration: configuration))")
+                         patternID: "\(isPreview ? "preview: " : "")표시=\(settings.displayMode.title) · 음성=\(settings.speechStyle.title) · \(signals.mode.title): \(signals.description(for: cue.signedDegrees, configuration: configuration))")
         } else if isSimulation, signals.mode == .haptic {
             clearSimulatedSignal()
             simulatedSignalAngle = cue.signedDegrees
@@ -199,7 +204,7 @@ final class LabModel: ObservableObject {
         continuousDegrees = reading.continuousDegrees
         recordWalkingHeading(sample)
         if !editing, let cue = detector.update(relativeDegrees: relativeDegrees) {
-            lastSignal = cue.label
+            lastSignal = settings.displayMode.label(Double(cue.signedDegrees))
             playCue(cue)
         }
     }

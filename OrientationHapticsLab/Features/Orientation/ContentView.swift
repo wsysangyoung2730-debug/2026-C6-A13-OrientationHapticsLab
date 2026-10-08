@@ -14,7 +14,7 @@ struct ContentView: View {
             ScrollView {
                 VStack(spacing: 18) {
                     headingCard
-                    SignalStatusView(signals: model.signals)
+                    SignalStatusView(signals: model.signals, displayMode: model.displayMode)
                     controls
                     WalkMetricsView(snapshot: model.walk, status: model.stepStatus)
                     StorageStatusView(store: model.sessionStore)
@@ -63,9 +63,21 @@ struct ContentView: View {
         .onReceive(model.settings.$signalMode) { _ in
             Task { @MainActor in model.applySettings() }
         }
+        .onReceive(model.settings.$displayMode) { _ in
+            Task { @MainActor in model.applySettings() }
+        }
+        .onReceive(model.settings.$speechStyle) { _ in
+            Task { @MainActor in model.applySettings() }
+        }
         .task {
             model.start()
             #if DEBUG && targetEnvironment(simulator)
+            if ProcessInfo.processInfo.arguments.contains("--snapshot-clock") {
+                model.settings.setDisplayMode(.clock)
+                model.applySettings()
+                model.reset()
+                model.simulate(heading: 75)
+            }
             if ProcessInfo.processInfo.arguments.contains("--snapshot-settings") { showSettings = true }
             #endif
         }
@@ -88,16 +100,30 @@ struct ContentView: View {
                 .font(.subheadline.monospacedDigit()).foregroundStyle(.secondary)
                 .accessibilityHidden(true)
             
-            Text(model.isCalibrated ? model.directionLabel : "기준 설정 대기")
-                .font(.title2.bold())
-                .accessibilityHidden(true)
-            
-            Text(model.isCalibrated ? "\(abs(model.relativeDegrees), specifier: "%.0f")°" : "—°")
-                .font(.system(size: 86, weight: .bold, design: .rounded))
+            Text(model.isCalibrated
+                 ? (model.displayMode == .clock ? "기준 정면 · 12시" : "기준에서 시계방향")
+                 : "기준 설정 대기")
+                .font(.title2.bold()).accessibilityHidden(true)
+            if model.displayMode == .clock {
+                DirectionClockFace(degrees: model.isCalibrated ? model.relativeDegrees : nil)
+                    .frame(height: 228)
+                    .accessibilityHidden(true)
+            }
+            Text(model.isCalibrated ? model.displayMode.value(model.relativeDegrees) : "—")
+                .font(.system(size: model.displayMode == .clock ? 58 : 86, weight: .bold, design: .rounded))
                 .monospacedDigit().minimumScaleFactor(0.5).lineLimit(1)
-                .accessibilityLabel(model.isCalibrated ? "\(model.directionLabel) \(abs(model.relativeDegrees), specifier: "%.0f")도" : "아직 기준 방향 없음")
-                .accessibilityAddTraits(.updatesFrequently) // 실시간으로 변하는 정보임을 VoiceOver에 알림
-            
+                .accessibilityLabel(model.isCalibrated
+                    ? model.displayMode.accessibilityLabel(model.relativeDegrees) : "아직 기준 방향 없음")
+                .accessibilityAddTraits(.updatesFrequently)
+                .accessibilityIdentifier("current-direction")
+            if model.displayMode == .angle {
+                Text("0° · 30° · 60° · 90° … 330°")
+                    .font(.caption).foregroundStyle(.secondary)
+            } else {
+                Text("가까운 시 방향 표시 · 바늘은 현재 몸 방향")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+
             Text(model.status).font(.subheadline).multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity).padding(22)
@@ -107,7 +133,7 @@ struct ContentView: View {
     private var controls: some View {
         VStack(spacing: 10) {
             Button { model.reset() } label: {
-                Label("현재 방향을 0°로 리셋", systemImage: "scope")
+                Label(model.displayMode == .clock ? "현재 방향을 12시로 리셋" : "현재 방향을 0°로 리셋", systemImage: "scope")
                     .font(.title3.bold()).frame(maxWidth: .infinity).padding(.vertical, 14)
             }
             .buttonStyle(.borderedProminent).disabled(!model.canReset)
@@ -127,7 +153,7 @@ struct ContentView: View {
                     .accessibilityLabel("가상 방향")
                 Text("가상 방향 \(simulatedHeading, specifier: "%.0f")°")
                 HStack {
-                    ForEach([-30, 30, 90], id: \.self) { angle in
+                    ForEach([0, 60, 180], id: \.self) { angle in
                         Button("\(angle)° 체험") { model.preview(AngleCue(signedDegrees: angle)) }
                             .buttonStyle(.bordered)
                     }
@@ -154,7 +180,7 @@ private struct ActiveSignalLayer: View {
     var body: some View {
         if let angle = signals.state.angle.map({ Int($0.rounded()) }) ?? model.simulatedSignalAngle ?? snapshotAngle {
             SignalOverlay(angle: angle, currentAngle: snapshotAngle.map(Double.init) ?? model.relativeDegrees,
-                          isPreview: isPreview || model.isSimulation, mode: signals.mode)
+                          isPreview: isPreview || model.isSimulation, mode: signals.mode, displayMode: model.displayMode)
                 .overlay(alignment: .bottom) {
                     if model.isSimulation, signals.mode == .haptic {
                         Text("시뮬레이터 · 실제 진동 없음")
@@ -171,10 +197,11 @@ private struct ActiveSignalLayer: View {
 
 private struct SignalStatusView: View {
     @ObservedObject var signals: SignalService
+    let displayMode: DirectionDisplayMode
     var body: some View {
         VStack(spacing: 4) {
             Text("신호 방식: \(signals.mode.title)").font(.subheadline.bold())
-            Text(signals.state.label.map { "신호: \($0)" } ?? "각도 신호 대기").font(.headline)
+            Text(signals.state.angle.map { "신호: \(displayMode.label($0))" } ?? signals.state.label ?? "방향 신호 대기").font(.headline)
             Text(signals.state.error ?? signals.state.status).font(.caption).foregroundStyle(.secondary)
         }.accessibilityElement(children: .combine)
     }
@@ -185,6 +212,41 @@ private struct StorageStatusView: View {
     var body: some View {
         if let message = store.storageMessage {
             Text(message).font(.footnote).foregroundStyle(.red)
+        }
+    }
+}
+
+
+/// The dial stays fixed to the reset reference; only the body-heading needle rotates.
+struct DirectionClockFace: View {
+    let degrees: Double?
+    var body: some View {
+        GeometryReader { proxy in
+            let size = min(proxy.size.width, proxy.size.height)
+            let center = CGPoint(x: proxy.size.width / 2, y: proxy.size.height / 2)
+            ZStack {
+                Circle().stroke(.secondary.opacity(0.25), lineWidth: 2)
+                    .frame(width: size - 30, height: size - 30)
+                    .position(center)
+                ForEach(1...12, id: \.self) { hour in
+                    let radians = Double(hour) * .pi / 6
+                    Text("\(hour)")
+                        .font(.body.weight(hour == 12 ? .bold : .medium))
+                        .foregroundStyle(hour == 12 ? Color.accentColor : .primary)
+                        .position(x: center.x + sin(radians) * (size / 2 - 30),
+                                  y: center.y - cos(radians) * (size / 2 - 30))
+                }
+                if let degrees, degrees.isFinite {
+                    Image(systemName: "location.north.fill")
+                        .font(.system(size: size * 0.33, weight: .regular))
+                        .foregroundStyle(Color.accentColor)
+                        .rotationEffect(.degrees(DirectionReference.clockwiseDegrees(degrees)))
+                        .position(center)
+                } else {
+                    Image(systemName: "scope").font(.largeTitle).foregroundStyle(.secondary)
+                        .position(center)
+                }
+            }
         }
     }
 }

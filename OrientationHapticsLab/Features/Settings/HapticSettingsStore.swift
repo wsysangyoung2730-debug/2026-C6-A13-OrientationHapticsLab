@@ -1,5 +1,6 @@
 import Combine
 import Foundation
+import OrientationCore
 
 @MainActor
 final class HapticSettingsStore: ObservableObject {
@@ -12,11 +13,15 @@ final class HapticSettingsStore: ObservableObject {
         let schemaVersion: Int
         let angles: [String: AngleSetting]
         let signalMode: String?
+        let displayMode: String?
+        let speechStyle: String?
     }
 
-    static let supportedAngles = [-90, -45, -30, 30, 45, 90]
+    static let supportedAngles = DirectionReference.signedLandmarks
     @Published private(set) var settings: [Int: AngleSetting]
     @Published private(set) var signalMode: SignalMode = .haptic
+    @Published private(set) var displayMode: DirectionDisplayMode = .angle
+    @Published private(set) var speechStyle: SpeechStyle = .angle
     @Published private(set) var errorMessage: String?
 
     private let defaults: UserDefaults
@@ -39,6 +44,16 @@ final class HapticSettingsStore: ObservableObject {
 
     func isEnabled(_ angle: Int) -> Bool {
         settings[angle]?.enabled ?? false
+    }
+
+    func setDisplayMode(_ mode: DirectionDisplayMode) {
+        displayMode = mode
+        save()
+    }
+
+    func setSpeechStyle(_ style: SpeechStyle) {
+        speechStyle = style
+        save()
     }
 
     func setSignalMode(_ mode: SignalMode) {
@@ -73,18 +88,21 @@ final class HapticSettingsStore: ObservableObject {
         }
         do {
             let snapshot = try JSONDecoder().decode(Snapshot.self, from: data)
-            guard (1...2).contains(snapshot.schemaVersion) else {
+            guard (1...3).contains(snapshot.schemaVersion) else {
                 errorMessage = "이 버전에서 읽을 수 없는 신호 설정이에요. 기본값을 사용합니다."
                 return
             }
             var restored = Self.makeDefaults()
             for angle in Self.supportedAngles {
-                if var setting = snapshot.angles[String(angle)] {
+                let legacy = snapshot.schemaVersion < 3 && abs(angle) == 60 ? (angle < 0 ? -45 : 45) : angle
+                if var setting = snapshot.angles[String(angle)] ?? snapshot.angles[String(legacy)] {
                     setting.configuration = Self.validated(setting.configuration)
                     restored[angle] = setting
                 }
             }
             settings = restored
+            displayMode = snapshot.displayMode.flatMap(DirectionDisplayMode.init(rawValue:)) ?? .angle
+            speechStyle = snapshot.speechStyle.flatMap(SpeechStyle.init(rawValue:)) ?? .angle
             signalMode = snapshot.signalMode.flatMap(SignalMode.init(rawValue:)) ?? .haptic
             if let savedMode = snapshot.signalMode, SignalMode(rawValue: savedMode) == nil {
                 errorMessage = "저장된 신호 방식을 읽지 못해 진동을 사용해요. 각도별 설정은 유지됩니다."
@@ -96,9 +114,11 @@ final class HapticSettingsStore: ObservableObject {
 
     private func save() {
         let snapshot = Snapshot(
-            schemaVersion: 2,
+            schemaVersion: 3,
             angles: Dictionary(uniqueKeysWithValues: settings.map { (String($0.key), $0.value) }),
-            signalMode: signalMode.rawValue
+            signalMode: signalMode.rawValue,
+            displayMode: displayMode.rawValue,
+            speechStyle: speechStyle.rawValue
         )
         do {
             defaults.set(try JSONEncoder().encode(snapshot), forKey: storageKey)

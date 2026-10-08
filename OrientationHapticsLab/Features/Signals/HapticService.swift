@@ -1,6 +1,7 @@
 import Combine
 import CoreHaptics
 import UIKit
+import OrientationCore
 
 /// Saved per angle by the app. Values remain valid after decoding and UI edits.
 struct HapticConfiguration: Codable, Equatable, Sendable {
@@ -10,8 +11,17 @@ struct HapticConfiguration: Codable, Equatable, Sendable {
         case double
         case triple
         case long
+        case shortShort, longLong, longShort, shortLong
+        case fast, slow, accelerating, decelerating
 
         var id: String { rawValue }
+        var group: String {
+            switch self {
+            case .shortShort, .longLong, .longShort, .shortLong: "길이 조합"
+            case .fast, .slow, .accelerating, .decelerating: "속도 변화"
+            default: "기존 리듬"
+            }
+        }
 
         var title: String {
             switch self {
@@ -20,6 +30,14 @@ struct HapticConfiguration: Codable, Equatable, Sendable {
             case .double: "짧게 두 번"
             case .triple: "짧게 세 번"
             case .long: "길게 한 번"
+            case .shortShort: "짧게–짧게"
+            case .longLong: "길게–길게"
+            case .longShort: "길게–짧게"
+            case .shortLong: "짧게–길게"
+            case .fast: "빠른 3회"
+            case .slow: "느린 3회"
+            case .accelerating: "점점 빠르게"
+            case .decelerating: "점점 느리게"
             }
         }
     }
@@ -107,12 +125,12 @@ final class HapticService: ObservableObject {
     func playAngle(_ signedDegrees: Double, configuration: HapticConfiguration? = nil) -> Bool {
         guard let magnitude = Self.supportedMagnitude(signedDegrees) else {
             stop()
-            lastError = "지원하는 각도는 왼쪽·오른쪽 30°, 45°, 90°입니다."
+            lastError = "정면과 뒤쪽을 포함한 30° 간격의 방향만 지원합니다."
             return false
         }
         return play(events: Self.configuredEvents(isLeft: signedDegrees < 0, magnitude: magnitude,
                    configuration: configuration ?? Self.defaultConfiguration(for: signedDegrees)),
-                    label: "\(signedDegrees < 0 ? "왼쪽" : "오른쪽") \(magnitude)°", angle: signedDegrees)
+                    label: AngleCue(signedDegrees: DirectionReference.landmark(signedDegrees)!).label, angle: signedDegrees)
     }
 
     @discardableResult
@@ -207,26 +225,34 @@ final class HapticService: ObservableObject {
 
     static func defaultConfiguration(for signedDegrees: Double) -> HapticConfiguration {
         let magnitude = supportedMagnitude(signedDegrees)
-        let intensity = magnitude == 30 ? 0.85 : magnitude == 45 ? 0.92 : 1.0
+        let intensity = magnitude == 30 ? 0.85 : magnitude == 60 ? 0.92 : 1.0
         return HapticConfiguration(preset: .directional, intensity: intensity, sharpness: 0.8)
     }
 
     static func patternDescription(for signedDegrees: Double, configuration: HapticConfiguration? = nil) -> String {
         if let configuration, configuration.preset != .directional {
-            return configuration.describe
+            switch configuration.preset {
+            case .shortShort, .longLong, .longShort, .shortLong:
+                return "\(configuration.preset.title) · 짧음 100ms / 김 350ms · 사이 쉼 200ms"
+            case .fast: return "65ms 진동 3회 · 사이 쉼 120ms → 120ms"
+            case .slow: return "65ms 진동 3회 · 사이 쉼 500ms → 500ms"
+            case .accelerating: return "65ms 진동 3회 · 사이 쉼 500ms → 120ms"
+            case .decelerating: return "65ms 진동 3회 · 사이 쉼 120ms → 500ms"
+            default: return configuration.describe
+            }
         }
         guard let magnitude = supportedMagnitude(signedDegrees) else { return "지원하지 않는 각도" }
+        if magnitude == 0 { return "정면 · 짧은 진동 한 번" }
+        if magnitude == 180 { return "뒤쪽 · 긴 진동 한 번" }
         let prefix = signedDegrees < 0 ? "긴 진동 한 번" : "짧은 진동 두 번"
-        let count = magnitude == 30 ? "한 번" : magnitude == 45 ? "두 번" : "세 번"
-        return "\(prefix) 뒤, 짧은 진동 \(count)"
+        return "\(prefix) 뒤, 짧은 진동 \(magnitude / 30)회"
     }
 
     private static func supportedMagnitude(_ value: Double) -> Int? {
-        guard value.isFinite else { return nil }
-        return [30, 45, 90].first { abs(abs(value) - Double($0)) < 0.001 }
+        DirectionReference.landmark(value).map { abs($0) }
     }
 
-    private static func configuredEvents(
+    static func configuredEvents(
         isLeft: Bool,
         magnitude: Int,
         configuration: HapticConfiguration
@@ -235,6 +261,10 @@ final class HapticService: ObservableObject {
         let sharpness = Float(configuration.sharpness)
         switch configuration.preset {
         case .directional:
+            if magnitude == 0 || magnitude == 180 {
+                return [pulse(at: 0, duration: magnitude == 0 ? 0.10 : 0.45,
+                              intensity: intensity, sharpness: sharpness)]
+            }
             var events: [HapticPulse]
             if isLeft {
                 events = [pulse(at: 0, duration: 0.10, intensity: intensity, sharpness: sharpness * 0.5)]
@@ -244,7 +274,7 @@ final class HapticService: ObservableObject {
                     pulse(at: 0.06, duration: 0.03, intensity: intensity, sharpness: sharpness)
                 ]
             }
-            let count = magnitude == 30 ? 1 : magnitude == 45 ? 2 : 3
+            let count = magnitude / 30
             for index in 0..<count {
                 events.append(pulse(
                     at: 0.16 + Double(index) * 0.09,
@@ -263,6 +293,25 @@ final class HapticService: ObservableObject {
             }
         case .long:
             return [pulse(at: 0, duration: 0.30, intensity: intensity, sharpness: sharpness)]
+        case .shortShort, .longLong, .longShort, .shortLong:
+            // DirectionHaptics set A: 100/350 ms pulses separated by 200 ms.
+            let first = configuration.preset == .longLong || configuration.preset == .longShort ? 0.35 : 0.10
+            let second = configuration.preset == .longLong || configuration.preset == .shortLong ? 0.35 : 0.10
+            return [pulse(at: 0, duration: first, intensity: intensity, sharpness: sharpness),
+                    pulse(at: first + 0.20, duration: second, intensity: intensity, sharpness: sharpness)]
+        case .fast, .slow, .accelerating, .decelerating:
+            // Set D's spacing, using this app's 65 ms continuous pulses.
+            let gaps: [Double]
+            switch configuration.preset {
+            case .fast: gaps = [0.12, 0.12]
+            case .slow: gaps = [0.50, 0.50]
+            case .accelerating: gaps = [0.50, 0.12]
+            default: gaps = [0.12, 0.50]
+            }
+            let duration = 0.065
+            return [0, duration + gaps[0], 2 * duration + gaps[0] + gaps[1]].map {
+                pulse(at: $0, duration: duration, intensity: intensity, sharpness: sharpness)
+            }
         }
     }
 

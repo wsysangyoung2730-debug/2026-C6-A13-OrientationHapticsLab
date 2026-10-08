@@ -7,6 +7,7 @@ final class AudioSignalService: NSObject, SignalOutput {
     @Published private(set) var state: SignalPlaybackState
     var statePublisher: AnyPublisher<SignalPlaybackState, Never> { $state.eraseToAnyPublisher() }
     private let mode: SignalMode
+    private var speechStyle: SpeechStyle = .angle
     private var synthesizer: AVSpeechSynthesizer?
     private var utteranceID: ObjectIdentifier?
     private var player: AVAudioPlayer?
@@ -56,6 +57,12 @@ final class AudioSignalService: NSObject, SignalOutput {
             }.store(in: &subscriptions)
     }
 
+    func setSpeechStyle(_ style: SpeechStyle) {
+        guard speechStyle != style else { return }
+        stop()
+        speechStyle = style
+    }
+
     func prepare() {
         guard state.label == nil else { return }
         state = .init(status: "\(mode.title) 준비됨")
@@ -63,16 +70,16 @@ final class AudioSignalService: NSObject, SignalOutput {
 
     @discardableResult
     func playAngle(_ signedDegrees: Double, configuration: HapticConfiguration? = nil) -> Bool {
-        guard let cue = AudioCue.angle(signedDegrees) else {
+        guard let cue = AudioCue.angle(signedDegrees, speechStyle: speechStyle) else {
             stop()
-            state = .init(status: "소리 각도 설정 오류", error: "지원하는 각도는 왼쪽·오른쪽 30°, 45°, 90°입니다.")
+            state = .init(status: "소리 각도 설정 오류", error: "정면과 뒤쪽을 포함한 30° 간격의 방향만 지원합니다.")
             return false
         }
         return play(cue, key: .angle(Int(signedDegrees.rounded())), angle: signedDegrees)
     }
 
     @discardableResult
-    func playReset() -> Bool { play(.reset, key: .reset, angle: nil) }
+    func playReset() -> Bool { play(.reset(style: speechStyle), key: .reset, angle: nil) }
 
     func stop() {
         generation &+= 1
