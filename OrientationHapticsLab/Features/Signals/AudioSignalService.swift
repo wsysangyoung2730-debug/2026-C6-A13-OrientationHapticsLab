@@ -95,7 +95,7 @@ final class AudioSignalService: NSObject, SignalOutput {
         }
         do {
             let session = AVAudioSession.sharedInstance()
-            try session.setCategory(.playback, mode: .default, options: [.mixWithOthers])
+            try session.setCategory(.playback, mode: .default, options: [.mixWithOthers, .duckOthers])
             try session.setActive(true)
             sessionActive = true
             guard session.outputVolume > 0 else {
