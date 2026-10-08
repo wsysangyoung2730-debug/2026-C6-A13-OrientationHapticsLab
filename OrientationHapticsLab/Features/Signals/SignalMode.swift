@@ -1,4 +1,5 @@
 import Foundation
+import OrientationCore
 
 enum SignalMode: String, Codable, CaseIterable, Identifiable, Sendable {
     case haptic
@@ -17,8 +18,8 @@ enum SignalMode: String, Codable, CaseIterable, Identifiable, Sendable {
     var explanation: String {
         switch self {
         case .haptic: "각도별로 지정한 진동 패턴과 세기로 알려요."
-        case .speech: "‘왼쪽 30도’처럼 방향과 각도를 한국어로 읽어 줘요."
-        case .beep: "왼쪽은 낮은 음, 오른쪽은 높은 음이에요. 30°는 1회, 45°는 2회, 90°는 3회 울려요."
+        case .speech: "방향을 한국어로 읽어요. 각도 또는 시계 표현을 선택할 수 있어요."
+        case .beep: "왼쪽은 낮은 음, 오른쪽은 높은 음이에요. 30° 간격마다 1~5회 울려요. 정면과 뒤쪽은 중간 음 1회·2회로 구분해요."
         }
     }
 
@@ -39,15 +40,22 @@ struct AudioCue: Equatable, Sendable {
     let pulseDuration: Double
     let gap: Double
 
-    static func angle(_ signedDegrees: Double) -> AudioCue? {
-        guard signedDegrees.isFinite,
-              let magnitude = [30, 45, 90].first(where: { abs(abs(signedDegrees) - Double($0)) < 0.001 }) else { return nil }
+    static func angle(_ signedDegrees: Double, speechStyle: SpeechStyle = .angle) -> AudioCue? {
+        guard let angle = DirectionReference.landmark(signedDegrees) else { return nil }
+        let axial = angle == 0 || angle == 180
         return AudioCue(
-            speech: "\(signedDegrees < 0 ? "왼쪽" : "오른쪽") \(magnitude)도",
-            frequency: signedDegrees < 0 ? 440 : 880,
-            count: magnitude == 30 ? 1 : magnitude == 45 ? 2 : 3,
+            speech: speechStyle == .clock ? DirectionReference.clockLabel(Double(angle))
+                : DirectionReference.angleSpeech(angle),
+            frequency: axial ? 660 : angle < 0 ? 440 : 880,
+            count: axial ? (angle == 0 ? 1 : 2) : abs(angle) / 30,
             pulseDuration: 0.16, gap: 0.12
         )
+    }
+
+    static func reset(style: SpeechStyle) -> AudioCue {
+        AudioCue(speech: style == .clock ? "현재 방향을 12시로 설정했어요" : reset.speech,
+                 frequency: reset.frequency, count: reset.count,
+                 pulseDuration: reset.pulseDuration, gap: reset.gap)
     }
 
     static let reset = AudioCue(speech: "기준 방향을 0도로 설정했어요", frequency: 660,
@@ -91,4 +99,34 @@ private extension Data {
         var littleEndian = value.littleEndian
         Swift.withUnsafeBytes(of: &littleEndian) { append(contentsOf: $0) }
     }
+}
+
+
+enum DirectionDisplayMode: String, Codable, CaseIterable, Identifiable, Sendable {
+    case angle, clock
+    var id: String { rawValue }
+    var title: String { self == .angle ? "각도" : "시계 방향" }
+
+    func value(_ degrees: Double) -> String {
+        guard degrees.isFinite else { return "—" }
+        if self == .clock {
+            return DirectionReference.nearestHour(degrees).map { "\($0)시" } ?? "—"
+        }
+        // Rounding a reading near 360° must still display the reference as 0°.
+        return "\(Int(DirectionReference.clockwiseDegrees(degrees).rounded()) % 360)°"
+    }
+
+    func label(_ degrees: Double) -> String {
+        self == .clock ? DirectionReference.clockLabel(degrees) : "기준에서 시계방향 \(value(degrees))"
+    }
+
+    func accessibilityLabel(_ degrees: Double) -> String {
+        label(degrees).replacingOccurrences(of: "°", with: "도")
+    }
+}
+
+enum SpeechStyle: String, Codable, CaseIterable, Identifiable, Sendable {
+    case angle, clock
+    var id: String { rawValue }
+    var title: String { self == .angle ? "각도로 읽기" : "시계 방향으로 읽기" }
 }

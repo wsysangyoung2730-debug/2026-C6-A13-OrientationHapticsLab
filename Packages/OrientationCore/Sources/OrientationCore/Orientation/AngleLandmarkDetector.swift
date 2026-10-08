@@ -7,8 +7,9 @@ public struct AngleCue: Codable, Sendable, Identifiable, Hashable {
     public var magnitudeDegrees: Int { signedDegrees == .min ? .max : abs(signedDegrees) }
     public var isRight: Bool { signedDegrees > 0 }
     public var label: String {
-        guard (-179...179).contains(signedDegrees) else { return "유효하지 않은 각도" }
+        guard (-180...180).contains(signedDegrees) else { return "유효하지 않은 각도" }
         if signedDegrees == 0 { return "정면 0°" }
+        if abs(signedDegrees) == 180 { return "뒤쪽 180°" }
         return "\(isRight ? "오른쪽" : "왼쪽") \(magnitudeDegrees)°"
     }
 
@@ -16,7 +17,7 @@ public struct AngleCue: Codable, Sendable, Identifiable, Hashable {
         self.signedDegrees = signedDegrees
     }
 
-    public static let defaults: [AngleCue] = [-90, -45, -30, 30, 45, 90].map {
+    public static let defaults: [AngleCue] = DirectionReference.signedLandmarks.map {
         AngleCue(signedDegrees: $0)
     }
 }
@@ -116,8 +117,9 @@ public struct AngleLandmarkDetector: Sendable {
     }
 
     private static func validCues(_ cues: [AngleCue]) -> [AngleCue] {
-        // Exclude the ambiguous antipode and invalid values without trapping on Int.min.
-        Array(Set(cues.filter { (-179...179).contains($0.signedDegrees) && $0.signedDegrees != 0 }))
-            .sorted { $0.signedDegrees < $1.signedDegrees }
+        // Both antipode signs represent the same direction. Keep a single stable ID.
+        Array(Set(cues.filter { (-180...180).contains($0.signedDegrees) }.map {
+            AngleCue(signedDegrees: $0.signedDegrees == -180 ? 180 : $0.signedDegrees)
+        })).sorted { $0.signedDegrees < $1.signedDegrees }
     }
 }

@@ -3,14 +3,14 @@ import XCTest
 
 final class AngleLandmarkDetectorTests: XCTestCase {
     func testDefaultLeftAndRightAnglesAndLabels() throws {
-        XCTAssertEqual(AngleCue.defaults.map(\.signedDegrees), [-90, -45, -30, 30, 45, 90])
+        XCTAssertEqual(AngleCue.defaults.map(\.signedDegrees), DirectionReference.signedLandmarks)
         XCTAssertEqual(AngleCue(signedDegrees: -30).label, "왼쪽 30°")
         XCTAssertEqual(AngleCue(signedDegrees: 45).label, "오른쪽 45°")
         let cue = AngleCue(signedDegrees: -90)
         XCTAssertEqual(try JSONDecoder().decode(AngleCue.self, from: JSONEncoder().encode(cue)), cue)
-        for angle in [-90, -45, -30, 30, 45, 90] {
+        for angle in DirectionReference.signedLandmarks {
             var detector = AngleLandmarkDetector()
-            detector.update(relativeDegrees: 0)
+            detector.update(relativeDegrees: Double(angle) - 10)
             XCTAssertEqual(detector.update(relativeDegrees: Double(angle))?.signedDegrees, angle)
         }
     }
@@ -29,16 +29,16 @@ final class AngleLandmarkDetectorTests: XCTestCase {
 
     func testCrossingOutsideWindowStillFiresAndDoesNotQueueOlderCues() {
         var detector = AngleLandmarkDetector()
-        XCTAssertNil(detector.update(relativeDegrees: 0))
-        XCTAssertEqual(detector.update(relativeDegrees: 80)?.signedDegrees, 45)
+        XCTAssertEqual(detector.update(relativeDegrees: 0)?.signedDegrees, 0)
+        XCTAssertEqual(detector.update(relativeDegrees: 80)?.signedDegrees, 60)
         XCTAssertNil(detector.update(relativeDegrees: 81))
         XCTAssertNil(detector.update(relativeDegrees: 82))
-        // The return path crosses 45° first, then 30°; the newer 30° cue wins.
-        XCTAssertEqual(detector.update(relativeDegrees: 0)?.signedDegrees, 30)
+        // The return crosses 60° and 30°; the newest front cue wins.
+        XCTAssertEqual(detector.update(relativeDegrees: 0)?.signedDegrees, 0)
         XCTAssertNil(detector.update(relativeDegrees: 0))
         XCTAssertEqual(detector.update(relativeDegrees: -100)?.signedDegrees, -90)
         XCTAssertNil(detector.update(relativeDegrees: -101))
-        XCTAssertEqual(detector.update(relativeDegrees: 0)?.signedDegrees, -30)
+        XCTAssertEqual(detector.update(relativeDegrees: 0)?.signedDegrees, 0)
     }
 
     func testFastCrossingRearmsWhenAlreadyOutsideOuterWindow() {
@@ -52,7 +52,7 @@ final class AngleLandmarkDetectorTests: XCTestCase {
     func testWrapBoundaryDoesNotCrossFrontAngles() {
         var detector = AngleLandmarkDetector()
         XCTAssertNil(detector.update(relativeDegrees: 170))
-        XCTAssertNil(detector.update(relativeDegrees: 179))
+        XCTAssertEqual(detector.update(relativeDegrees: 179)?.signedDegrees, 180)
         XCTAssertNil(detector.update(relativeDegrees: -179))
         XCTAssertNil(detector.update(relativeDegrees: -170))
         XCTAssertEqual(detector.update(relativeDegrees: -80)?.signedDegrees, -90)
@@ -108,8 +108,72 @@ final class AngleLandmarkDetectorTests: XCTestCase {
             entryToleranceDegrees: .nan,
             rearmToleranceDegrees: -1
         )
-        XCTAssertEqual(detector.cues.map(\.signedDegrees), [30])
+        XCTAssertEqual(detector.cues.map(\.signedDegrees), [0, 30, 180])
         XCTAssertEqual(detector.entryToleranceDegrees, 3)
         XCTAssertEqual(detector.rearmToleranceDegrees, 6)
+    }
+}
+
+
+final class ClockDirectionTests: XCTestCase {
+    func testEveryLandmarkMapsToClockInBothTurnDirections() {
+        for (index, angle) in DirectionReference.signedLandmarks.enumerated() {
+            let hour = index == 0 ? 12 : index
+            XCTAssertEqual(DirectionReference.nearestHour(Double(angle)), hour)
+            XCTAssertEqual(DirectionReference.nearestHour(Double(angle) - 360), hour)
+            XCTAssertEqual(DirectionReference.nearestHour(Double(angle) + 720), hour)
+        }
+        XCTAssertEqual(DirectionReference.nearestHour(-14), 12)
+        XCTAssertEqual(DirectionReference.nearestHour(-16), 11)
+        XCTAssertEqual(DirectionReference.nearestHour(14), 12)
+        XCTAssertEqual(DirectionReference.nearestHour(16), 1)
+        XCTAssertEqual(DirectionReference.nearestHour(-180), 6)
+        XCTAssertNil(DirectionReference.nearestHour(.nan))
+        XCTAssertNil(DirectionReference.landmark(45))
+        XCTAssertNil(DirectionReference.landmark(.infinity))
+        XCTAssertEqual(DirectionReference.landmark(-180), 180)
+    }
+
+    func testClockwiseAndCounterclockwiseFullTurnsEmitEachLandmarkOnce() {
+        for sign in [1, -1] {
+            var detector = AngleLandmarkDetector()
+            // The app consumes the initial front event when reset is announced.
+            _ = detector.update(relativeDegrees: 0)
+            var events: [Int] = []
+            for step in 1...720 {
+                if let cue = detector.update(relativeDegrees: Double(step * sign)) {
+                    events.append(cue.signedDegrees)
+                }
+            }
+            let clockwise = [30, 60, 90, 120, 150, 180, -150, -120, -90, -60, -30, 0]
+            let counterclockwise = [-30, -60, -90, -120, -150, 180, 150, 120, 90, 60, 30, 0]
+            XCTAssertEqual(events, (sign == 1 ? clockwise : counterclockwise) + (sign == 1 ? clockwise : counterclockwise))
+        }
+    }
+
+    func testFrontAndRearHysteresisDoNotChatterAcrossWrap() {
+        var detector = AngleLandmarkDetector()
+        XCTAssertEqual(detector.update(relativeDegrees: 0)?.id, 0)
+        for value in [1.0, -1, 3, -3, 5, -5, 0] {
+            XCTAssertNil(detector.update(relativeDegrees: value))
+        }
+        _ = detector.update(relativeDegrees: 10)
+        XCTAssertEqual(detector.update(relativeDegrees: 2)?.id, 0)
+        detector.reset()
+        XCTAssertEqual(detector.update(relativeDegrees: 180)?.id, 180)
+        for value in [-179.0, 179, -180, 176, -176, 180] {
+            XCTAssertNil(detector.update(relativeDegrees: value))
+        }
+        _ = detector.update(relativeDegrees: 170)
+        XCTAssertEqual(detector.update(relativeDegrees: -179)?.id, 180)
+    }
+
+    func testDisablingFrontAndRearLeavesOtherLandmarksWorking() {
+        var detector = AngleLandmarkDetector(cues: AngleCue.defaults.filter { $0.id != 0 && $0.id != 180 })
+        XCTAssertNil(detector.update(relativeDegrees: 0))
+        XCTAssertEqual(detector.update(relativeDegrees: 30)?.id, 30)
+        detector.reset()
+        XCTAssertNil(detector.update(relativeDegrees: 180))
+        XCTAssertEqual(detector.update(relativeDegrees: -150)?.id, -150)
     }
 }

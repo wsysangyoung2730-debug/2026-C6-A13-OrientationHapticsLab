@@ -93,5 +93,7 @@ private func reasonText(_ reason: SessionEndReason) -> String {
 }
 
 private func angleText(_ value: Double) -> String {
-    abs(value) < 0.5 ? "정면 0°" : "\(value < 0 ? "왼쪽" : "오른쪽") \(Int(abs(value).rounded()))°"
+    if abs(value) < 0.5 { return "정면 0°" }
+    if abs(abs(value) - 180) < 0.5 { return "뒤쪽 180°" }
+    return "\(value < 0 ? "왼쪽" : "오른쪽") \(Int(abs(value).rounded()))°"
 }
