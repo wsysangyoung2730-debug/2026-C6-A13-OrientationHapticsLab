@@ -141,7 +141,7 @@ final class AudioCueTests: XCTestCase {
     func testNineAnglesHaveExpectedSpeechAndBeepCodes() throws {
         var speech = Set<String>()
         var beep = Set<String>()
-        for angle in [-180, -135, -90, -45, 0, 45, 90, 135, 180] {
+        for angle in [-135, -90, -45, 0, 45, 90, 135, 180] {
             let cue = try XCTUnwrap(AudioCue.angle(Double(angle)))
             let expectedSpeech = angle == 0 ? "정면 0도" : abs(angle) == 180 ? "뒤쪽 180도" : "\(angle < 0 ? "왼쪽" : "오른쪽") \(abs(angle))도"
             XCTAssertEqual(cue.speech, expectedSpeech)
@@ -152,7 +152,7 @@ final class AudioCueTests: XCTestCase {
             speech.insert(cue.speech)
             beep.insert(cue.beepDescription)
         }
-        XCTAssertEqual(speech.count, 8) // -180 and 180 share "뒤쪽 180도"
+        XCTAssertEqual(speech.count, 8)
         XCTAssertEqual(AudioCue.reset.speech, "기준 방향을 0도로 설정했어요")
         XCTAssertEqual(AudioCue.reset.frequency, 660)
         XCTAssertEqual(AudioCue.reset.duration, 0.5)
@@ -165,7 +165,7 @@ final class AudioCueTests: XCTestCase {
     }
 
     func testEveryWaveDecodesAsMonoAndHasExpectedDuration() throws {
-        let cues = try [-180, -135, -90, -45, 0, 45, 90, 135, 180].map { try XCTUnwrap(AudioCue.angle(Double($0))) } + [.reset]
+        let cues = try [-135, -90, -45, 0, 45, 90, 135, 180].map { try XCTUnwrap(AudioCue.angle(Double($0))) } + [.reset]
         for cue in cues {
             let player = try AVAudioPlayer(data: cue.waveData(), fileTypeHint: AVFileType.wav.rawValue)
             XCTAssertEqual(player.numberOfChannels, 1)

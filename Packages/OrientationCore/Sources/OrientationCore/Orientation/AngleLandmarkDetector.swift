@@ -17,7 +17,7 @@ public struct AngleCue: Codable, Sendable, Identifiable, Hashable {
         self.signedDegrees = signedDegrees
     }
 
-    public static let defaults: [AngleCue] = [-180, -135, -90, -45, 0, 45, 90, 135, 180].map {
+    public static let defaults: [AngleCue] = [-135, -90, -45, 0, 45, 90, 135, 180].map {
         AngleCue(signedDegrees: $0)
     }
 }

@@ -32,7 +32,7 @@ final class HapticSettingsStoreTests: XCTestCase {
             XCTAssertNotNil(defaults.data(forKey: key))
             let restored = HapticSettingsStore(defaults: defaults, storageKey: key)
             XCTAssertEqual(restored.settings, expected)
-            XCTAssertEqual(restored.enabledAngles, [-180, -90, 0, 90, 180])
+            XCTAssertEqual(restored.enabledAngles, [-135, -45, 45, 135])
             XCTAssertNil(restored.errorMessage)
         }
     }
@@ -154,8 +154,8 @@ final class HapticSettingsStoreTests: XCTestCase {
     }
 
     private func assertDefaults(_ store: HapticSettingsStore, file: StaticString = #filePath, line: UInt = #line) {
-        XCTAssertEqual(Set(store.settings.keys), Set([-180, -135, -90, -45, 0, 45, 90, 135, 180]), file: file, line: line)
-        XCTAssertEqual(store.enabledAngles, Set([-180, -135, -90, -45, 0, 45, 90, 135, 180]), file: file, line: line)
+        XCTAssertEqual(Set(store.settings.keys), Set([-135, -90, -45, 0, 45, 90, 135, 180]), file: file, line: line)
+        XCTAssertEqual(store.enabledAngles, Set([-135, -90, -45, 0, 45, 90, 135, 180]), file: file, line: line)
         for angle in HapticSettingsStore.supportedAngles {
             XCTAssertTrue(store.isEnabled(angle), file: file, line: line)
             XCTAssertEqual(store.configuration(for: angle),
