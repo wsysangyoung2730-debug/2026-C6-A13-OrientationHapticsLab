@@ -63,7 +63,7 @@ final class HapticSettingsStoreTests: XCTestCase {
                 "unexpected preferences type",
                 Data("not JSON".utf8),
                 Data(repeating: 0x20, count: 65_537),
-                Data(#"{"schemaVersion":1,"angles":{"30":{"enabled":true,"configuration":{"preset":"unknown","intensity":0.8,"sharpness":0.5}}}}"#.utf8)
+                Data(#"{"schemaVersion":1,"angles":{"45":{"enabled":true,"configuration":{"preset":"unknown","intensity":0.8,"sharpness":0.5}}}}"#.utf8)
             ]
             for value in invalidValues {
                 defaults.set(value, forKey: key)
@@ -81,7 +81,7 @@ final class HapticSettingsStoreTests: XCTestCase {
 
     func testFutureSchemaFallsBackWithoutOverwritingSavedPayloadOnRead() throws {
         try withIsolatedDefaults { defaults, key in
-            let payload = Data(#"{"schemaVersion":99,"angles":{"30":{"enabled":false,"configuration":{"preset":"long","intensity":0.3,"sharpness":0.2}}}}"#.utf8)
+            let payload = Data(#"{"schemaVersion":99,"angles":{"45":{"enabled":false,"configuration":{"preset":"long","intensity":0.3,"sharpness":0.2}}}}"#.utf8)
             defaults.set(payload, forKey: key)
             let store = HapticSettingsStore(defaults: defaults, storageKey: key)
             assertDefaults(store)
@@ -92,14 +92,14 @@ final class HapticSettingsStoreTests: XCTestCase {
 
     func testPartialPayloadRestoresKnownAnglesAndClampsDecodedParameters() throws {
         try withIsolatedDefaults { defaults, key in
-            let payload = Data(#"{"schemaVersion":1,"angles":{"30":{"enabled":false,"configuration":{"preset":"long","intensity":-99,"sharpness":99}},"-45":{"enabled":true,"configuration":{"preset":"double","intensity":999,"sharpness":-1}},"13":{"enabled":true,"configuration":{"preset":"single","intensity":0.5,"sharpness":0.5}}}}"#.utf8)
+            let payload = Data(#"{"schemaVersion":1,"angles":{"45":{"enabled":false,"configuration":{"preset":"long","intensity":-99,"sharpness":99}},"-45":{"enabled":true,"configuration":{"preset":"double","intensity":999,"sharpness":-1}},"13":{"enabled":true,"configuration":{"preset":"single","intensity":0.5,"sharpness":0.5}}}}"#.utf8)
             defaults.set(payload, forKey: key)
             let store = HapticSettingsStore(defaults: defaults, storageKey: key)
             XCTAssertNil(store.errorMessage)
-            XCTAssertFalse(store.isEnabled(30))
-            XCTAssertEqual(store.configuration(for: 30).preset, .long)
-            XCTAssertEqual(store.configuration(for: 30).intensity, 0.1)
-            XCTAssertEqual(store.configuration(for: 30).sharpness, 1)
+            XCTAssertFalse(store.isEnabled(45))
+            XCTAssertEqual(store.configuration(for: 45).preset, .long)
+            XCTAssertEqual(store.configuration(for: 45).intensity, 0.1)
+            XCTAssertEqual(store.configuration(for: 45).sharpness, 1)
             XCTAssertEqual(store.configuration(for: -45).preset, .double)
             XCTAssertEqual(store.configuration(for: -45).intensity, 1)
             XCTAssertEqual(store.configuration(for: -45).sharpness, 0)

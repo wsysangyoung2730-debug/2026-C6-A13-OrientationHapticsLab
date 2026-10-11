@@ -23,12 +23,12 @@ final class SignalModeSettingsTests: XCTestCase {
 
     func testOldSettingsMigrateToHapticsWithoutLosingEdits() throws {
         try withDefaults { defaults in
-            let old = Data(#"{"schemaVersion":1,"angles":{"30":{"enabled":false,"configuration":{"preset":"long","intensity":0.3,"sharpness":0.2}}}}"#.utf8)
+            let old = Data(#"{"schemaVersion":1,"angles":{"45":{"enabled":false,"configuration":{"preset":"long","intensity":0.3,"sharpness":0.2}}}}"#.utf8)
             defaults.set(old, forKey: "orientationHaptics.angleSettings")
             let store = HapticSettingsStore(defaults: defaults)
             XCTAssertEqual(store.signalMode, .haptic)
-            XCTAssertFalse(store.isEnabled(30))
-            XCTAssertEqual(store.configuration(for: 30).preset, .long)
+            XCTAssertFalse(store.isEnabled(45))
+            XCTAssertEqual(store.configuration(for: 45).preset, .long)
             XCTAssertNil(store.errorMessage)
             store.setSignalMode(.speech)
             let restored = HapticSettingsStore(defaults: defaults)
@@ -174,7 +174,7 @@ final class AudioCueTests: XCTestCase {
     }
 
     func testBeepWaveHasSilenceBetweenPulsesAndDoesNotClip() throws {
-        let cue = try XCTUnwrap(AudioCue.angle(90))
+        let cue = try XCTUnwrap(AudioCue.angle(135))
         let data = cue.waveData()
         let samples: [Int16] = stride(from: 44, to: data.count, by: 2).map {
             Int16(bitPattern: UInt16(data[$0]) | UInt16(data[$0 + 1]) << 8)
