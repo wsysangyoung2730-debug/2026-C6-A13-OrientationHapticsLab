@@ -3,12 +3,14 @@ import XCTest
 
 final class AngleLandmarkDetectorTests: XCTestCase {
     func testDefaultLeftAndRightAnglesAndLabels() throws {
-        XCTAssertEqual(AngleCue.defaults.map(\.signedDegrees), [-90, -45, -30, 30, 45, 90])
-        XCTAssertEqual(AngleCue(signedDegrees: -30).label, "왼쪽 30°")
+        XCTAssertEqual(AngleCue.defaults.map(\.signedDegrees), [-180, -90, -45, 45, 90, 180])
+        XCTAssertEqual(AngleCue(signedDegrees: -45).label, "왼쪽 45°")
         XCTAssertEqual(AngleCue(signedDegrees: 45).label, "오른쪽 45°")
+        XCTAssertEqual(AngleCue(signedDegrees: 180).label, "180°")
+        XCTAssertEqual(AngleCue(signedDegrees: -180).label, "180°")
         let cue = AngleCue(signedDegrees: -90)
         XCTAssertEqual(try JSONDecoder().decode(AngleCue.self, from: JSONEncoder().encode(cue)), cue)
-        for angle in [-90, -45, -30, 30, 45, 90] {
+        for angle in [-180, -90, -45, 45, 90, 180] {
             var detector = AngleLandmarkDetector()
             detector.update(relativeDegrees: 0)
             XCTAssertEqual(detector.update(relativeDegrees: Double(angle))?.signedDegrees, angle)
@@ -104,11 +106,11 @@ final class AngleLandmarkDetectorTests: XCTestCase {
         XCTAssertEqual(AngleCue(signedDegrees: .min).label, "유효하지 않은 각도")
         XCTAssertGreaterThan(AngleCue(signedDegrees: .min).magnitudeDegrees, 0)
         let detector = AngleLandmarkDetector(
-            cues: [-180, 0, 180, Int.min, Int.max, 30, 30].map(AngleCue.init),
+            cues: [0, Int.min, Int.max, 45, 45].map(AngleCue.init),
             entryToleranceDegrees: .nan,
             rearmToleranceDegrees: -1
         )
-        XCTAssertEqual(detector.cues.map(\.signedDegrees), [30])
+        XCTAssertEqual(detector.cues.map(\.signedDegrees), [45])
         XCTAssertEqual(detector.entryToleranceDegrees, 3)
         XCTAssertEqual(detector.rearmToleranceDegrees, 6)
     }

@@ -29,8 +29,10 @@ struct SettingsView: View {
                             .font(.footnote).foregroundStyle(.secondary)
                     }
                 }
-                angleSection(title: "왼쪽", angles: [-30, -45, -90])
-                angleSection(title: "오른쪽", angles: [30, 45, 90])
+                angleSection(title: "정면", angles: [0])
+                angleSection(title: "오른쪽 (시계방향)", angles: [45, 90, 135])
+                angleSection(title: "왼쪽 (반시계방향)", angles: [-45, -90, -135])
+                angleSection(title: "뒤쪽", angles: [180])
                 if let error = store.errorMessage {
                     Section("설정 저장 상태") {
                         Text(error).foregroundStyle(.red).fixedSize(horizontal: false, vertical: true)
@@ -158,7 +160,7 @@ private struct AngleSettingEditor: View {
             }
             if store.signalMode == .haptic, configuration.preset == .directional {
                 Section("기본 리듬 읽는 법") {
-                    Text("왼쪽은 긴 진동 한 번, 오른쪽은 짧은 진동 두 번으로 시작해요. 잠깐 쉰 뒤 30°는 한 번, 45°는 두 번, 90°는 세 번 짧게 울려요.")
+                    Text("0°(정면)와 180°(뒤쪽)는 긴 진동, 45°(315°)는 1번, 90°(270°)는 2번, 135°(225°)는 3번 울려요.")
                         .font(.subheadline).fixedSize(horizontal: false, vertical: true)
                 }
             }

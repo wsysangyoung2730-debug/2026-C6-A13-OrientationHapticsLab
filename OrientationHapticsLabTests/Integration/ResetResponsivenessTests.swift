@@ -25,7 +25,7 @@ final class HapticResponsivenessTests: XCTestCase {
     func testCancelledCallbacksCannotRestoreOldOverlay() async {
         let driver = ControlledHapticDriver()
         let service = HapticService(driver: driver, supportsHaptics: true, isForeground: true)
-        service.playAngle(-30)
+        service.playAngle(-45)
         await waitUntil { await driver.latestRevision > 0 }
         let old = await driver.latestRevision
         service.playAngle(90)

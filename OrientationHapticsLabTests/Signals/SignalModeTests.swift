@@ -86,7 +86,7 @@ final class SignalRoutingTests: XCTestCase {
         service.setMode(.beep)
         XCTAssertEqual(old.stopCount, 1)
         XCTAssertNil(service.state.angle)
-        service.playAngle(30)
+        service.playAngle(45)
         let current = service.state
         old.state = .init(label: "obsolete", angle: -90, status: "late completion")
         XCTAssertEqual(service.state, current)
@@ -104,7 +104,7 @@ final class SignalRoutingTests: XCTestCase {
         XCTAssertEqual(selected.stopCount, 0)
         XCTAssertEqual(service.state.angle, 90)
         selected.acceptsPlayback = false
-        XCTAssertFalse(service.playAngle(30))
+        XCTAssertFalse(service.playAngle(45))
         XCTAssertNil(service.state.angle)
         XCTAssertNotNil(service.state.error)
     }
@@ -138,32 +138,34 @@ private final class FakeSignalOutput: SignalOutput {
 }
 
 final class AudioCueTests: XCTestCase {
-    func testSixAnglesHaveUniqueSpeechAndBeepCodes() throws {
+    func testNineAnglesHaveExpectedSpeechAndBeepCodes() throws {
         var speech = Set<String>()
         var beep = Set<String>()
-        for angle in [-90, -45, -30, 30, 45, 90] {
+        for angle in [-180, -135, -90, -45, 0, 45, 90, 135, 180] {
             let cue = try XCTUnwrap(AudioCue.angle(Double(angle)))
-            XCTAssertEqual(cue.speech, "\(angle < 0 ? "왼쪽" : "오른쪽") \(abs(angle))도")
-            XCTAssertEqual(cue.frequency, angle < 0 ? 440 : 880)
-            XCTAssertEqual(cue.count, abs(angle) == 30 ? 1 : abs(angle) == 45 ? 2 : 3)
+            let expectedSpeech = angle == 0 ? "정면 0도" : abs(angle) == 180 ? "뒤쪽 180도" : "\(angle < 0 ? "왼쪽" : "오른쪽") \(abs(angle))도"
+            XCTAssertEqual(cue.speech, expectedSpeech)
+            let expectedFrequency = angle < 0 ? 440 : angle == 0 ? 660 : 880
+            XCTAssertEqual(cue.frequency, expectedFrequency)
+            let expectedCount = (angle == 0 || abs(angle) == 180 || abs(angle) == 45) ? 1 : abs(angle) == 90 ? 2 : 3
+            XCTAssertEqual(cue.count, expectedCount)
             speech.insert(cue.speech)
             beep.insert(cue.beepDescription)
         }
-        XCTAssertEqual(speech.count, 6)
-        XCTAssertEqual(beep.count, 6)
+        XCTAssertEqual(speech.count, 8) // -180 and 180 share "뒤쪽 180도"
         XCTAssertEqual(AudioCue.reset.speech, "기준 방향을 0도로 설정했어요")
         XCTAssertEqual(AudioCue.reset.frequency, 660)
         XCTAssertEqual(AudioCue.reset.duration, 0.5)
     }
 
     func testUnsupportedAndNonFiniteAnglesDoNotProduceSounds() {
-        for angle in [0.0, 13, 180, 360, .nan, .infinity, -.infinity] {
+        for angle in [13.0, 30, 360, .nan, .infinity, -.infinity] {
             XCTAssertNil(AudioCue.angle(angle))
         }
     }
 
     func testEveryWaveDecodesAsMonoAndHasExpectedDuration() throws {
-        let cues = try [-90, -45, -30, 30, 45, 90].map { try XCTUnwrap(AudioCue.angle(Double($0))) } + [.reset]
+        let cues = try [-180, -135, -90, -45, 0, 45, 90, 135, 180].map { try XCTUnwrap(AudioCue.angle(Double($0))) } + [.reset]
         for cue in cues {
             let player = try AVAudioPlayer(data: cue.waveData(), fileTypeHint: AVFileType.wav.rawValue)
             XCTAssertEqual(player.numberOfChannels, 1)

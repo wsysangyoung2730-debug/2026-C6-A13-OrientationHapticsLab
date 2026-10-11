@@ -14,7 +14,7 @@ final class HapticSettingsStore: ObservableObject {
         let signalMode: String?
     }
 
-    static let supportedAngles = [-90, -45, -30, 30, 45, 90]
+    static let supportedAngles = [-180, -135, -90, -45, 0, 45, 90, 135, 180]
     @Published private(set) var settings: [Int: AngleSetting]
     @Published private(set) var signalMode: SignalMode = .haptic
     @Published private(set) var errorMessage: String?

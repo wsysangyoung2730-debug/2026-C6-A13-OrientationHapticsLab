@@ -22,9 +22,9 @@ final class HapticSettingsStoreTests: XCTestCase {
             let presets: [HapticConfiguration.Preset] = [.long, .single, .double, .triple, .directional, .long]
             for (index, angle) in HapticSettingsStore.supportedAngles.enumerated() {
                 store.setConfiguration(HapticConfiguration(
-                    preset: presets[index],
-                    intensity: 0.2 + Double(index) * 0.1,
-                    sharpness: Double(index) * 0.15
+                    preset: presets[index % presets.count],
+                    intensity: min(1.0, 0.2 + Double(index) * 0.08),
+                    sharpness: min(1.0, Double(index) * 0.1)
                 ), for: angle)
                 store.setEnabled(angle, enabled: index.isMultiple(of: 2))
             }
@@ -32,7 +32,7 @@ final class HapticSettingsStoreTests: XCTestCase {
             XCTAssertNotNil(defaults.data(forKey: key))
             let restored = HapticSettingsStore(defaults: defaults, storageKey: key)
             XCTAssertEqual(restored.settings, expected)
-            XCTAssertEqual(restored.enabledAngles, [-90, -30, 45])
+            XCTAssertEqual(restored.enabledAngles, [-180, -90, 0, 90, 180])
             XCTAssertNil(restored.errorMessage)
         }
     }
@@ -42,16 +42,16 @@ final class HapticSettingsStoreTests: XCTestCase {
             let store = HapticSettingsStore(defaults: defaults, storageKey: key)
             let initial = store.settings
             let custom = HapticConfiguration(preset: .triple, intensity: 0.4, sharpness: 0.15)
-            store.setConfiguration(custom, for: -30)
-            store.setEnabled(-30, enabled: false)
-            XCTAssertEqual(store.configuration(for: -30), custom)
-            XCTAssertFalse(store.isEnabled(-30))
-            for angle in HapticSettingsStore.supportedAngles where angle != -30 {
+            store.setConfiguration(custom, for: -45)
+            store.setEnabled(-45, enabled: false)
+            XCTAssertEqual(store.configuration(for: -45), custom)
+            XCTAssertFalse(store.isEnabled(-45))
+            for angle in HapticSettingsStore.supportedAngles where angle != -45 {
                 XCTAssertEqual(store.settings[angle], initial[angle], "Unexpected edit of \(angle)°")
             }
-            store.resetConfiguration(for: -30)
-            XCTAssertEqual(store.configuration(for: -30), HapticService.defaultConfiguration(for: -30))
-            XCTAssertFalse(store.isEnabled(-30), "Resetting a rhythm must preserve its enabled switch.")
+            store.resetConfiguration(for: -45)
+            XCTAssertEqual(store.configuration(for: -45), HapticService.defaultConfiguration(for: -45))
+            XCTAssertFalse(store.isEnabled(-45), "Resetting a rhythm must preserve its enabled switch.")
             let restored = HapticSettingsStore(defaults: defaults, storageKey: key)
             XCTAssertEqual(restored.settings, store.settings)
         }
@@ -154,8 +154,8 @@ final class HapticSettingsStoreTests: XCTestCase {
     }
 
     private func assertDefaults(_ store: HapticSettingsStore, file: StaticString = #filePath, line: UInt = #line) {
-        XCTAssertEqual(Set(store.settings.keys), Set([-90, -45, -30, 30, 45, 90]), file: file, line: line)
-        XCTAssertEqual(store.enabledAngles, Set([-90, -45, -30, 30, 45, 90]), file: file, line: line)
+        XCTAssertEqual(Set(store.settings.keys), Set([-180, -135, -90, -45, 0, 45, 90, 135, 180]), file: file, line: line)
+        XCTAssertEqual(store.enabledAngles, Set([-180, -135, -90, -45, 0, 45, 90, 135, 180]), file: file, line: line)
         for angle in HapticSettingsStore.supportedAngles {
             XCTAssertTrue(store.isEnabled(angle), file: file, line: line)
             XCTAssertEqual(store.configuration(for: angle),

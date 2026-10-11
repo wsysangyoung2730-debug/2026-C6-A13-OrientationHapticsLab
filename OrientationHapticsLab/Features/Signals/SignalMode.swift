@@ -41,12 +41,35 @@ struct AudioCue: Equatable, Sendable {
 
     static func angle(_ signedDegrees: Double) -> AudioCue? {
         guard signedDegrees.isFinite,
-              let magnitude = [30, 45, 90].first(where: { abs(abs(signedDegrees) - Double($0)) < 0.001 }) else { return nil }
+              let magnitude = [0, 45, 90, 135, 180].first(where: { abs(abs(signedDegrees) - Double($0)) < 0.001 }) else { return nil }
+        let speech: String
+        if magnitude == 0 {
+            speech = "정면 0도"
+        } else if magnitude == 180 {
+            speech = "뒤쪽 180도"
+        } else {
+            speech = "\(signedDegrees < 0 ? "왼쪽" : "오른쪽") \(magnitude)도"
+        }
+        let count: Int
+        let pulseDuration: Double
+        if magnitude == 0 || magnitude == 180 {
+            count = 1
+            pulseDuration = 0.45
+        } else if magnitude == 45 {
+            count = 1
+            pulseDuration = 0.16
+        } else if magnitude == 90 {
+            count = 2
+            pulseDuration = 0.16
+        } else { // 135
+            count = 3
+            pulseDuration = 0.16
+        }
         return AudioCue(
-            speech: "\(signedDegrees < 0 ? "왼쪽" : "오른쪽") \(magnitude)도",
-            frequency: signedDegrees < 0 ? 440 : 880,
-            count: magnitude == 30 ? 1 : magnitude == 45 ? 2 : 3,
-            pulseDuration: 0.16, gap: 0.12
+            speech: speech,
+            frequency: signedDegrees < 0 ? 440 : signedDegrees == 0 ? 660 : 880,
+            count: count,
+            pulseDuration: pulseDuration, gap: 0.12
         )
     }
 

@@ -133,11 +133,21 @@ actor HapticEngineDriver: HapticDriving {
         pending = nil
         let token = revision
         do {
-            let events = pulses.map {
-                CHHapticEvent(eventType: .hapticContinuous, parameters: [
-                    CHHapticEventParameter(parameterID: .hapticIntensity, value: $0.intensity),
-                    CHHapticEventParameter(parameterID: .hapticSharpness, value: $0.sharpness)
-                ], relativeTime: $0.time, duration: $0.duration)
+            var events: [CHHapticEvent] = []
+            for pulse in pulses {
+                // 1. 순간적인 타격감을 극대화하는 Transient 펄스 (쿵! 때려주는 효과)
+                events.append(CHHapticEvent(eventType: .hapticTransient, parameters: [
+                    CHHapticEventParameter(parameterID: .hapticIntensity, value: pulse.intensity),
+                    CHHapticEventParameter(parameterID: .hapticSharpness, value: pulse.sharpness)
+                ], relativeTime: pulse.time))
+                
+                // 2. 묵직한 진동 에너지를 몸에 전달하는 Continuous 펄스 (부우웅 울려주는 효과)
+                if pulse.duration > 0.01 {
+                    events.append(CHHapticEvent(eventType: .hapticContinuous, parameters: [
+                        CHHapticEventParameter(parameterID: .hapticIntensity, value: pulse.intensity),
+                        CHHapticEventParameter(parameterID: .hapticSharpness, value: pulse.sharpness)
+                    ], relativeTime: pulse.time, duration: pulse.duration))
+                }
             }
             let pattern = try CHHapticPattern(events: events, parameters: [])
             let created = try engine.makeAdvancedPlayer(with: pattern)
