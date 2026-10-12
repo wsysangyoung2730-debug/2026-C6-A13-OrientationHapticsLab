@@ -138,14 +138,14 @@ private final class FakeSignalOutput: SignalOutput {
 }
 
 final class AudioCueTests: XCTestCase {
-    func testNineAnglesHaveExpectedSpeechAndBeepCodes() throws {
+    func testEightAnglesHaveExpectedSpeechAndBeepCodes() throws {
         var speech = Set<String>()
         var beep = Set<String>()
         for angle in [-135, -90, -45, 0, 45, 90, 135, 180] {
             let cue = try XCTUnwrap(AudioCue.angle(Double(angle)))
             let expectedSpeech = angle == 0 ? "정면 0도" : abs(angle) == 180 ? "뒤쪽 180도" : "\(angle < 0 ? "왼쪽" : "오른쪽") \(abs(angle))도"
             XCTAssertEqual(cue.speech, expectedSpeech)
-            let expectedFrequency = angle < 0 ? 440 : angle == 0 ? 660 : 880
+            let expectedFrequency: Double = angle < 0 ? 440 : angle == 0 ? 660 : 880
             XCTAssertEqual(cue.frequency, expectedFrequency)
             let expectedCount = (angle == 0 || abs(angle) == 180 || abs(angle) == 45) ? 1 : abs(angle) == 90 ? 2 : 3
             XCTAssertEqual(cue.count, expectedCount)
@@ -153,6 +153,7 @@ final class AudioCueTests: XCTestCase {
             beep.insert(cue.beepDescription)
         }
         XCTAssertEqual(speech.count, 8)
+        XCTAssertEqual(beep.count, 8)
         XCTAssertEqual(AudioCue.reset.speech, "기준 방향을 0도로 설정했어요")
         XCTAssertEqual(AudioCue.reset.frequency, 660)
         XCTAssertEqual(AudioCue.reset.duration, 0.5)
@@ -162,6 +163,15 @@ final class AudioCueTests: XCTestCase {
         for angle in [13.0, 30, 360, .nan, .infinity, -.infinity] {
             XCTAssertNil(AudioCue.angle(angle))
         }
+    }
+
+    func testRearAngleAliasesAndFrontToleranceKeepTheSameAudioMeaning() throws {
+        XCTAssertEqual(AudioCue.angle(-180), AudioCue.angle(180))
+        for angle in [-0.0005, 0.0005] {
+            XCTAssertEqual(AudioCue.angle(angle), AudioCue.angle(0))
+        }
+        XCTAssertEqual(try XCTUnwrap(AudioCue.angle(45)).beepDescription, "높은 음 · 1회")
+        XCTAssertEqual(try XCTUnwrap(AudioCue.angle(180)).beepDescription, "높은 음 · 길게 1회")
     }
 
     func testEveryWaveDecodesAsMonoAndHasExpectedDuration() throws {

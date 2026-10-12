@@ -2,6 +2,21 @@ import XCTest
 @testable import OrientationCore
 
 final class AngleLandmarkDetectorTests: XCTestCase {
+    func testFullCircleBothWaysEmitsEachDirectionOnceIncludingRearAndReturnToFront() {
+        for direction in [1, -1] {
+            var detector = AngleLandmarkDetector()
+            _ = detector.update(relativeDegrees: 0) // Same priming as a reference reset.
+            let cues = (1...360).compactMap {
+                detector.update(relativeDegrees: Double($0 * direction))?.signedDegrees
+            }
+            let expected = direction == 1
+                ? [45, 90, 135, 180, -135, -90, -45, 0]
+                : [-45, -90, -135, 180, 135, 90, 45, 0]
+            XCTAssertEqual(cues, expected)
+            XCTAssertNil(detector.update(relativeDegrees: 0))
+        }
+    }
+
     func testDefaultLeftAndRightAnglesAndLabels() throws {
         XCTAssertEqual(AngleCue.defaults.map(\.signedDegrees), [-135, -90, -45, 0, 45, 90, 135, 180])
         XCTAssertEqual(AngleCue(signedDegrees: 0).label, "정면 0°")

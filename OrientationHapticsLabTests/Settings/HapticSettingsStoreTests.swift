@@ -115,6 +115,25 @@ final class HapticSettingsStoreTests: XCTestCase {
         }
     }
 
+    func testPreviousSixDirectionSettingsPreserveSharedAnglesAndDefaultNewOnes() throws {
+        try withIsolatedDefaults { defaults, key in
+            let payload = Data(#"{"schemaVersion":2,"signalMode":"speech","angles":{"-30":{"enabled":false,"configuration":{"preset":"long","intensity":0.2,"sharpness":0.2}},"-45":{"enabled":false,"configuration":{"preset":"double","intensity":0.4,"sharpness":0.3}},"90":{"enabled":true,"configuration":{"preset":"triple","intensity":0.6,"sharpness":0.5}}}}"#.utf8)
+            defaults.set(payload, forKey: key)
+            let store = HapticSettingsStore(defaults: defaults, storageKey: key)
+            XCTAssertEqual(store.signalMode, .speech)
+            XCTAssertFalse(store.isEnabled(-45))
+            XCTAssertEqual(store.configuration(for: -45), .init(preset: .double, intensity: 0.4, sharpness: 0.3))
+            XCTAssertEqual(store.configuration(for: 90), .init(preset: .triple, intensity: 0.6, sharpness: 0.5))
+            XCTAssertNil(store.settings[-30])
+            for angle in [-135, 0, 135, 180] {
+                XCTAssertTrue(store.isEnabled(angle))
+                XCTAssertEqual(store.configuration(for: angle).intensity, 1)
+            }
+            store.setSignalMode(.beep)
+            XCTAssertEqual(HapticSettingsStore(defaults: defaults, storageKey: key).settings, store.settings)
+        }
+    }
+
     func testUnknownAngleEditsDoNotMutateSupportedSettings() throws {
         try withIsolatedDefaults { defaults, key in
             let store = HapticSettingsStore(defaults: defaults, storageKey: key)

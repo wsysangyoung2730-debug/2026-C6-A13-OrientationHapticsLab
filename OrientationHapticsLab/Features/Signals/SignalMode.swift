@@ -17,8 +17,8 @@ enum SignalMode: String, Codable, CaseIterable, Identifiable, Sendable {
     var explanation: String {
         switch self {
         case .haptic: "각도별로 지정한 진동 패턴과 세기로 알려요."
-        case .speech: "‘왼쪽 30도’처럼 방향과 각도를 한국어로 읽어 줘요."
-        case .beep: "왼쪽은 낮은 음, 오른쪽은 높은 음이에요. 30°는 1회, 45°는 2회, 90°는 3회 울려요."
+        case .speech: "‘왼쪽 45도’, ‘정면 0도’, ‘뒤쪽 180도’처럼 방향과 각도를 한국어로 읽어 줘요."
+        case .beep: "왼쪽은 낮은 음, 오른쪽은 높은 음이에요. 45°는 1회, 90°는 2회, 135°는 3회 울려요. 정면은 중간 음, 뒤쪽은 높은 음으로 길게 한 번 울려요."
         }
     }
 
@@ -67,7 +67,7 @@ struct AudioCue: Equatable, Sendable {
         }
         return AudioCue(
             speech: speech,
-            frequency: signedDegrees < 0 ? 440 : signedDegrees == 0 ? 660 : 880,
+            frequency: magnitude == 0 ? 660 : magnitude == 180 ? 880 : signedDegrees < 0 ? 440 : 880,
             count: count,
             pulseDuration: pulseDuration, gap: 0.12
         )
@@ -76,7 +76,9 @@ struct AudioCue: Equatable, Sendable {
     static let reset = AudioCue(speech: "기준 방향을 0도로 설정했어요", frequency: 660,
                                count: 1, pulseDuration: 0.5, gap: 0)
 
-    var beepDescription: String { "\(frequency < 660 ? "낮은" : frequency > 660 ? "높은" : "중간") 음 · \(count)회" }
+    var beepDescription: String {
+        "\(frequency < 660 ? "낮은" : frequency > 660 ? "높은" : "중간") 음 · \(pulseDuration >= 0.4 ? "길게 " : "")\(count)회"
+    }
     var duration: Double { Double(count) * pulseDuration + Double(max(0, count - 1)) * gap }
 
     /// Mono PCM WAV with a short fade on each pulse to avoid clicks. No external sound assets.

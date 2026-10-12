@@ -67,7 +67,7 @@ final class HapticService: ObservableObject {
     @Published private(set) var currentlyPlaying: String?
     @Published private(set) var currentlyPlayingAngle: Double?
     @Published private(set) var lastError: String?
-    static let resetPatternDescription = "부드러운 긴 진동 두 번"
+    static let resetPatternDescription = "긴 진동 한 번 (0.70초)"
 
     private let driver: any HapticDriving
     private var revision: UInt = 0
