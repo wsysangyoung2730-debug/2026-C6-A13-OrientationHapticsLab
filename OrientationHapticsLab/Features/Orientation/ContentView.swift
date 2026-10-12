@@ -126,10 +126,12 @@ struct ContentView: View {
                     .onChange(of: simulatedHeading) { _, value in model.simulate(heading: value) }
                     .accessibilityLabel("가상 방향")
                 Text("가상 방향 \(simulatedHeading, specifier: "%.0f")°")
-                HStack {
-                    ForEach([-30, 30, 90], id: \.self) { angle in
-                        Button("\(angle)° 체험") { model.preview(AngleCue(signedDegrees: angle)) }
-                            .buttonStyle(.bordered)
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack {
+                        ForEach([-135, -90, -45, 0, 45, 90, 135, 180], id: \.self) { angle in
+                            Button("\(angle)° 체험") { model.preview(AngleCue(signedDegrees: angle)) }
+                                .buttonStyle(.bordered)
+                        }
                     }
                 }
             }

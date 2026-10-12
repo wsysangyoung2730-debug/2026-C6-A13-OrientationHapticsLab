@@ -43,17 +43,16 @@ struct SignalOverlay: View {
 
     static func backgroundColor(for angle: Int) -> Color {
         switch angle {
-        case -30: Color(red: 0.078, green: 0.341, blue: 0.769)
-        case -45: Color(red: 0.188, green: 0.212, blue: 0.627)
-        case -90: Color(red: 0.424, green: 0.153, blue: 0.663)
-        case 30: Color(red: 1.0, green: 0.835, blue: 0.310)
-        case 45: Color(red: 1.0, green: 0.541, blue: 0.239)
-        case 90: Color(red: 0.718, green: 0.098, blue: 0.141)
+        case 0: Color(red: 0.12, green: 0.65, blue: 0.35)
+        case -45, 45: Color(red: 1.0, green: 0.541, blue: 0.239)
+        case -90, 90: Color(red: 0.718, green: 0.098, blue: 0.141)
+        case -135, 135: Color(red: 0.424, green: 0.153, blue: 0.663)
+        case 180, -180: Color(red: 0.188, green: 0.212, blue: 0.627)
         default: Color(red: 0.12, green: 0.15, blue: 0.20)
         }
     }
 
     static func foregroundColor(for angle: Int) -> Color {
-        angle == 30 || angle == 45 ? .black : .white
+        abs(angle) == 45 ? .black : .white
     }
 }

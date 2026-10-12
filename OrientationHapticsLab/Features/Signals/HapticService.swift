@@ -32,7 +32,7 @@ struct HapticConfiguration: Codable, Equatable, Sendable {
         didSet { sharpness = Self.bounded(sharpness, fallback: 0.8) }
     }
 
-    init(preset: Preset = .directional, intensity: Double = 0.9, sharpness: Double = 0.8) {
+    init(preset: Preset = .directional, intensity: Double = 1.0, sharpness: Double = 0.8) {
         self.preset = preset
         self.intensity = Self.bounded(intensity, fallback: 0.9)
         self.sharpness = Self.bounded(sharpness, fallback: 0.8)
@@ -67,7 +67,7 @@ final class HapticService: ObservableObject {
     @Published private(set) var currentlyPlaying: String?
     @Published private(set) var currentlyPlayingAngle: Double?
     @Published private(set) var lastError: String?
-    static let resetPatternDescription = "부드러운 긴 진동 두 번"
+    static let resetPatternDescription = "긴 진동 한 번 (0.70초)"
 
     private let driver: any HapticDriving
     private var revision: UInt = 0
@@ -107,18 +107,18 @@ final class HapticService: ObservableObject {
     func playAngle(_ signedDegrees: Double, configuration: HapticConfiguration? = nil) -> Bool {
         guard let magnitude = Self.supportedMagnitude(signedDegrees) else {
             stop()
-            lastError = "지원하는 각도는 왼쪽·오른쪽 30°, 45°, 90°입니다."
+            lastError = "지원하는 각도는 0°, 45°, 90°, 135°, 180°입니다."
             return false
         }
+        let label = magnitude == 0 ? "정면 0°" : magnitude == 180 ? "180°" : "\(signedDegrees < 0 ? "왼쪽" : "오른쪽") \(magnitude)°"
         return play(events: Self.configuredEvents(isLeft: signedDegrees < 0, magnitude: magnitude,
                    configuration: configuration ?? Self.defaultConfiguration(for: signedDegrees)),
-                    label: "\(signedDegrees < 0 ? "왼쪽" : "오른쪽") \(magnitude)°", angle: signedDegrees)
+                    label: label, angle: signedDegrees)
     }
 
     @discardableResult
     func playReset() -> Bool {
-        play(events: [Self.pulse(at: 0, duration: 0.17, intensity: 0.85, sharpness: 0.2),
-                      Self.pulse(at: 0.30, duration: 0.17, intensity: 0.85, sharpness: 0.2)],
+        play(events: [Self.pulse(at: 0, duration: 0.70, intensity: 1.0, sharpness: 0.6)],
              label: "기준 방향 리셋")
     }
 
@@ -206,9 +206,7 @@ final class HapticService: ObservableObject {
     }
 
     static func defaultConfiguration(for signedDegrees: Double) -> HapticConfiguration {
-        let magnitude = supportedMagnitude(signedDegrees)
-        let intensity = magnitude == 30 ? 0.85 : magnitude == 45 ? 0.92 : 1.0
-        return HapticConfiguration(preset: .directional, intensity: intensity, sharpness: 0.8)
+        return HapticConfiguration(preset: .directional, intensity: 1.0, sharpness: 0.85)
     }
 
     static func patternDescription(for signedDegrees: Double, configuration: HapticConfiguration? = nil) -> String {
@@ -216,14 +214,18 @@ final class HapticService: ObservableObject {
             return configuration.describe
         }
         guard let magnitude = supportedMagnitude(signedDegrees) else { return "지원하지 않는 각도" }
-        let prefix = signedDegrees < 0 ? "긴 진동 한 번" : "짧은 진동 두 번"
-        let count = magnitude == 30 ? "한 번" : magnitude == 45 ? "두 번" : "세 번"
-        return "\(prefix) 뒤, 짧은 진동 \(count)"
+        switch magnitude {
+        case 0, 180: return "긴 진동 한 번"
+        case 45: return "진동 한 번"
+        case 90: return "진동 두 번"
+        case 135: return "진동 세 번"
+        default: return "진동"
+        }
     }
 
     private static func supportedMagnitude(_ value: Double) -> Int? {
         guard value.isFinite else { return nil }
-        return [30, 45, 90].first { abs(abs(value) - Double($0)) < 0.001 }
+        return [0, 45, 90, 135, 180].first { abs(abs(value) - Double($0)) < 0.001 }
     }
 
     private static func configuredEvents(
@@ -235,34 +237,35 @@ final class HapticService: ObservableObject {
         let sharpness = Float(configuration.sharpness)
         switch configuration.preset {
         case .directional:
-            var events: [HapticPulse]
-            if isLeft {
-                events = [pulse(at: 0, duration: 0.10, intensity: intensity, sharpness: sharpness * 0.5)]
-            } else {
-                events = [
-                    pulse(at: 0, duration: 0.03, intensity: intensity, sharpness: sharpness),
-                    pulse(at: 0.06, duration: 0.03, intensity: intensity, sharpness: sharpness)
-                ]
+            // 0도와 180도는 긴 진동
+            // 45도(315도) 1번, 90도(270도) 2번, 135도(225도) 3번
+            switch magnitude {
+            case 0, 180:
+                return [pulse(at: 0, duration: 0.70, intensity: intensity, sharpness: sharpness)]
+            case 45:
+                return [pulse(at: 0, duration: 0.12, intensity: intensity, sharpness: sharpness)]
+            case 90:
+                let interval = 0.25
+                return (0..<2).map { index in
+                    pulse(at: Double(index) * interval, duration: 0.12, intensity: intensity, sharpness: sharpness)
+                }
+            case 135:
+                let interval = 0.25
+                return (0..<3).map { index in
+                    pulse(at: Double(index) * interval, duration: 0.12, intensity: intensity, sharpness: sharpness)
+                }
+            default:
+                return [pulse(at: 0, duration: 0.12, intensity: intensity, sharpness: sharpness)]
             }
-            let count = magnitude == 30 ? 1 : magnitude == 45 ? 2 : 3
-            for index in 0..<count {
-                events.append(pulse(
-                    at: 0.16 + Double(index) * 0.09,
-                    duration: 0.035,
-                    intensity: intensity,
-                    sharpness: sharpness
-                ))
-            }
-            return events
         case .single:
-            return [pulse(at: 0, duration: 0.065, intensity: intensity, sharpness: sharpness)]
+            return [pulse(at: 0, duration: 0.15, intensity: intensity, sharpness: sharpness)]
         case .double, .triple:
             let count = configuration.preset == .double ? 2 : 3
             return (0..<count).map { index in
-                pulse(at: Double(index) * 0.13, duration: 0.065, intensity: intensity, sharpness: sharpness)
+                pulse(at: Double(index) * 0.22, duration: 0.10, intensity: intensity, sharpness: sharpness)
             }
         case .long:
-            return [pulse(at: 0, duration: 0.30, intensity: intensity, sharpness: sharpness)]
+            return [pulse(at: 0, duration: 0.45, intensity: intensity, sharpness: sharpness)]
         }
     }
 

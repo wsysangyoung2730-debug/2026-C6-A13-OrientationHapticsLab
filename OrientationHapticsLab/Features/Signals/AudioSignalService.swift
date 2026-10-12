@@ -65,7 +65,7 @@ final class AudioSignalService: NSObject, SignalOutput {
     func playAngle(_ signedDegrees: Double, configuration: HapticConfiguration? = nil) -> Bool {
         guard let cue = AudioCue.angle(signedDegrees) else {
             stop()
-            state = .init(status: "소리 각도 설정 오류", error: "지원하는 각도는 왼쪽·오른쪽 30°, 45°, 90°입니다.")
+            state = .init(status: "소리 각도 설정 오류", error: "지원하는 각도는 0°, 45°, 90°, 135°, 180°입니다.")
             return false
         }
         return play(cue, key: .angle(Int(signedDegrees.rounded())), angle: signedDegrees)

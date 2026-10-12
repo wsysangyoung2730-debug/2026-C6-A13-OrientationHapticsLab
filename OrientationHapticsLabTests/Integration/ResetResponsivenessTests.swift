@@ -5,6 +5,44 @@ import XCTest
 
 @MainActor
 final class HapticResponsivenessTests: XCTestCase {
+    func testEightDirectionRhythmsKeepSymmetricCountsAndConfiguredIntensity() async throws {
+        let driver = ControlledHapticDriver()
+        let service = HapticService(driver: driver, supportsHaptics: true, isForeground: true)
+        let configuration = HapticConfiguration(preset: .directional, intensity: 0.4, sharpness: 0.3)
+        let cases: [(Double, Int, Double)] = [
+            (-135, 3, 0.12), (-90, 2, 0.12), (-45, 1, 0.12), (0, 1, 0.70),
+            (45, 1, 0.12), (90, 2, 0.12), (135, 3, 0.12), (180, 1, 0.70)
+        ]
+        for (angle, count, duration) in cases {
+            let previous = await driver.latestRevision
+            XCTAssertTrue(service.playAngle(angle, configuration: configuration))
+            await waitUntil { await driver.latestRevision > previous }
+            let pulses = await driver.lastPulses
+            XCTAssertEqual(pulses.count, count, "angle=\(angle)")
+            for (index, pulse) in pulses.enumerated() {
+                XCTAssertEqual(pulse.time, Double(index) * 0.25, accuracy: 0.001)
+                XCTAssertEqual(pulse.duration, duration, accuracy: 0.001)
+                XCTAssertEqual(pulse.intensity, 0.4, accuracy: 0.001)
+                XCTAssertEqual(pulse.sharpness, 0.3, accuracy: 0.001)
+            }
+        }
+        service.stop()
+    }
+
+    func testResetRequestsOneLongPulseAndMatchingDescription() async throws {
+        let driver = ControlledHapticDriver()
+        let service = HapticService(driver: driver, supportsHaptics: true, isForeground: true)
+        XCTAssertTrue(service.playReset())
+        await waitUntil { await driver.latestRevision > 0 }
+        let pulses = await driver.lastPulses
+        XCTAssertEqual(pulses.count, 1)
+        let pulse = try XCTUnwrap(pulses.first)
+        XCTAssertEqual(pulse.duration, 0.70, accuracy: 0.001)
+        XCTAssertEqual(pulse.intensity, 1)
+        XCTAssertEqual(HapticService.resetPatternDescription, "긴 진동 한 번 (0.70초)")
+        service.stop()
+    }
+
     func testHardwarePreparationDoesNotBlockAndStopKeepsEngineWarm() async throws {
         let driver = ControlledHapticDriver()
         let service = HapticService(driver: driver, supportsHaptics: true, isForeground: true)
@@ -25,7 +63,7 @@ final class HapticResponsivenessTests: XCTestCase {
     func testCancelledCallbacksCannotRestoreOldOverlay() async {
         let driver = ControlledHapticDriver()
         let service = HapticService(driver: driver, supportsHaptics: true, isForeground: true)
-        service.playAngle(-30)
+        service.playAngle(-45)
         await waitUntil { await driver.latestRevision > 0 }
         let old = await driver.latestRevision
         service.playAngle(90)
@@ -65,6 +103,7 @@ final class HapticResponsivenessTests: XCTestCase {
 
 private actor ControlledHapticDriver: HapticDriving {
     var latestRevision: UInt = 0
+    var lastPulses: [HapticPulse] = []
     var lastSuspend: Bool?
     private var replies: [UInt: HapticReply] = [:]
     func prepare(revision: UInt, reply: @escaping HapticReply) {
@@ -73,6 +112,7 @@ private actor ControlledHapticDriver: HapticDriving {
     }
     func play(_ pulses: [HapticPulse], revision: UInt, reply: @escaping HapticReply) {
         latestRevision = max(latestRevision, revision)
+        lastPulses = pulses
         replies[revision] = reply
     }
     func cancel(revision: UInt, suspend: Bool) { lastSuspend = suspend }
